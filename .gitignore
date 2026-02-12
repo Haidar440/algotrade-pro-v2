@@ -1,0 +1,56 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# AlgoTrade Pro — .gitignore
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# ── Environment & Secrets ──
+.env
+.env.local
+.env.production
+.env.*.local
+.master.key
+*.key
+*.pem
+
+# ── Python ──
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+*.egg
+
+# ── Node.js ──
+node_modules/
+package-lock.json
+
+# ── Logs ──
+logs/
+*.log
+error.log
+
+# ── Database ──
+*.db
+*.sqlite3
+*.sql.backup
+
+# ── IDE ──
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Build ──
+dist/
+build/
+
+# ── Temporary ──
+tempCodeRunnerFile.*
+*.tmp
