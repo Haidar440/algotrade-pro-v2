@@ -7,7 +7,7 @@ ensures we never accidentally expose internal fields (like hashed passwords)
 and always validate incoming data before it touches the database.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Generic, Optional, TypeVar
 
 from pydantic import BaseModel, Field
@@ -29,7 +29,7 @@ class ApiResponse(BaseModel, Generic[T]):
     success: bool = True
     data: T
     message: str = "OK"
-    timestamp: datetime = Field(default_factory=lambda: datetime.utcnow())
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class ApiErrorResponse(BaseModel):
@@ -41,7 +41,7 @@ class ApiErrorResponse(BaseModel):
     success: bool = False
     error: str
     error_code: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.utcnow())
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 # ━━━━━━━━━━━━━━━ Auth Schemas ━━━━━━━━━━━━━━━

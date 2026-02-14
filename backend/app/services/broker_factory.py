@@ -3,7 +3,7 @@ Module: app/services/broker_factory.py
 Purpose: Factory for creating broker instances — single entry point.
 
 Uses BrokerName enum to determine which implementation to return.
-Decoupts the rest of the application from specific broker classes.
+Decouples the rest of the application from specific broker classes.
 """
 
 import logging
