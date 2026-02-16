@@ -1,60 +1,112 @@
-# File Registry — Sprint 1 Foundation
+# File Registry — All Sprints (1-4)
 
-This document records every file created or updated during the Sprint 1 Foundation phase.
+This document records every file created or updated across all sprints.
 
 ## 📂 Backend Core (`backend/app/`)
 
-| File | Purpose | Key Functionality |
+| File | Sprint | Purpose |
 |---|---|---|
-| **`__init__.py`** | Package initialization | Defines app version (`__version__ = "1.0.0"`). |
-| **`config.py`** | Configuration & Settings | Loads environment variables using `pydantic-settings`. Validates types (e.g., `DATABASE_URL`, `JWT_SECRET_KEY`) and provides typed access (e.g., `settings.DEBUG`). **Zero `os.getenv` elsewhere.** |
-| **`constants.py`** | Enums & Magic Strings | Centralizes all constant values (OrderTypes, TradeStatus, AuditActions) as 13 Python Enums. **Prevents typo bugs.** |
-| **`exceptions.py`** | Error Handling | Defines 10 typed exceptions (e.g., `NotFoundError`, `UnauthorizedError`) mapping to HTTP status codes. |
-| **`logging_config.py`** | Logging Setup | Configures structured logging with 4 handlers: Console (dev), `app.log` (debug), `errors.log` (warning+), `trades.log` (audit). |
-| **`database.py`** | Database Connection | Manages async PostgreSQL connection using `SQLAlchemy` + `asyncpg`. Provides `get_db` dependency for session management. |
-| **`middleware.py`** | Request Processing | global middleware for CORS, Request ID tracking, Response timing, and **Global Exception Handling** (catches errors -> JSON). |
-| **`dependencies.py`** | Dependency Injection | Central DI container. Provides cached singletons like `CredentialVault` and `DatabaseSession`. |
-| **`main.py`** | Application Entry | Wires everything together: Middleware + Routers + Database Lifecycle. The FastAPI app instance lives here. |
+| `__init__.py` | 1 | Package init — `__version__ = "1.0.0"` |
+| `config.py` | 1 | **Only** env var reader. Pydantic Settings → `settings` singleton. Crashes if `.env` invalid |
+| `constants.py` | 1+4 | 15 Enums (zero magic strings). Sprint 4 added `StrategyType`, `BacktestStatus` |
+| `exceptions.py` | 1+3 | 11 custom exceptions → HTTP codes. Sprint 3 added `ServiceUnavailableError` |
+| `logging_config.py` | 1 | 4 handlers: console, `app.log`, `errors.log`, `trades.log` |
+| `database.py` | 1 | Async PostgreSQL — SQLAlchemy 2.0, pool(10+20), `get_db()` |
+| `middleware.py` | 1 | CORS + SlowAPI rate limit + request ID + timing + error handler |
+| `dependencies.py` | 1 | DI container — cached vault singleton, DB session |
+| `main.py` | 1-4 | Entry point — wires 7 routers, lifespan (startup/shutdown) |
 
-## 🔒 Security Layer (`backend/app/security/`)
+## 🔒 Security (`backend/app/security/`)
 
-| File | Purpose | Key Functionality |
+| File | Sprint | Purpose |
 |---|---|---|
-| **`vault.py`** | Credential Encryption | Encrypts/Decrypts sensitive broker credentials using **Fernet (AES-256)**. Uses `MASTER_ENCRYPTION_KEY`. |
-| **`auth.py`** | Authentication | Handles **JWT** token creation/validation and **Bcrypt** password hashing. Provides `get_current_user` dependency. |
+| `vault.py` | 1 | Fernet AES-256 encrypt/decrypt for broker credentials |
+| `auth.py` | 1 | JWT (HS256, 60min) + bcrypt. `get_current_user()` dependency |
 
-## 🗄️ Database Models (`backend/app/models/`)
+## 🗄️ Models (`backend/app/models/`)
 
-| File | Purpose | Key Functionality |
+| File | Sprint | Purpose |
 |---|---|---|
-| **`base.py`** | Base Model | Abstract parent for all models. Automatically adds `id`, `created_at`, `updated_at` columns to every table. |
-| **`trade.py`** | Trade Model | SQL table definition for Trades. Stores symbol, price, quantity, status, strategy, PnL. |
-| **`watchlist.py`** | Watchlist Model | SQL table for Watchlists. Uses **JSONB** to store flexible lists of stocks/tokens. |
-| **`instrument.py`** | Instrument Model | SQL table for Broker Instruments (Master file). Indexed for fast search. |
-| **`audit.py`** | Audit Log Model | **Append-only** table recording every user action (Login, Trade, Delete). Immutable audit trail. |
-| **`schemas.py`** | Pydantic Schemas | Defines API Request/Response shapes. Ensures strict validation before data hits the DB. |
+| `base.py` | 1 | Abstract parent → auto `id`, `created_at`, `updated_at` |
+| `trade.py` | 1 | Trade table — symbol, side, qty, price, status, pnl, broker |
+| `watchlist.py` | 1 | Watchlist table — JSONB items |
+| `instrument.py` | 1 | Instrument table — NSE/BSE symbol tokens |
+| `audit.py` | 1 | AuditLog — append-only action log |
+| `schemas.py` | 1-4 | 32 Pydantic schemas (Sprint 3: +9 AI, Sprint 4: +5 backtest) |
 
-## 🌐 API Routers (`backend/app/routers/`)
+## 🌐 Routers (`backend/app/routers/`)
 
-| File | Purpose | Key Functionality |
+| File | Sprint | Endpoints | Purpose |
+|---|---|---|---|
+| `health.py` | 1 | 1 | `GET /api/health` — DB check |
+| `auth.py` | 1 | 2 | Login (JSON + OAuth2) → JWT |
+| `trades.py` | 1 | 5 | CRUD for trades |
+| `watchlists.py` | 1 | 5 | CRUD for watchlists |
+| `broker.py` | 2 | 13 | Connect, orders, positions, risk, kill switch |
+| `ai.py` | 3 | 5 | Analyze, predict, news, picks, analytics |
+| `backtest.py` | 4 | 3 | Strategies list, run backtest, optimize |
+
+## ⚙️ Services — Broker (`backend/app/services/`)
+
+| File | Sprint | Class | Purpose |
+|---|---|---|---|
+| `broker_interface.py` | 2 | `BrokerInterface` (ABC) | 10 abstract methods |
+| `angel_broker.py` | 2 | `AngelOneBroker` | SmartAPI + TOTP auth |
+| `zerodha_broker.py` | 2 | `ZerodhaBroker` | KiteConnect SDK |
+| `paper_trader.py` | 2 | `PaperTrader` | Virtual ₹1L capital |
+| `broker_factory.py` | 2 | — | `create_broker()` factory |
+| `risk_manager.py` | 2 | `RiskManager` | 6 pre-trade checks + kill switch |
+
+## 🧠 Services — AI & Analysis (`backend/app/services/`)
+
+| File | Sprint | Class | Purpose |
+|---|---|---|---|
+| `technical.py` | 3 | `TechnicalAnalyzer` | 15+ indicators via pandas-ta |
+| `ai_engine.py` | 3 | `AIEngine` | LangChain + Gemini AI analysis |
+| `tavily_search.py` | 3 | `TavilySearchService` | Real-time market news |
+| `stock_picker.py` | 3 | `StockPicker` | 10-layer scoring → stock picks |
+| `analytics.py` | 3 | `PerformanceAnalytics` | Sharpe, drawdown, win rate |
+
+## 📈 Services — Backtesting (`backend/app/services/`)
+
+| File | Sprint | Class | Purpose |
+|---|---|---|---|
+| `data_provider.py` | 4 | `DataProvider` | Angel → yfinance → demo. 30min cache |
+| `backtest_engine.py` | 4 | `BacktestEngine` | 0.2% costs, HTML charts, optimization |
+
+## 📊 Strategies (`backend/app/strategies/`)
+
+| File | Sprint | Strategy | Win Rate |
+|---|---|---|---|
+| `__init__.py` | 4 | Lazy registry | — |
+| `base.py` | 4 | `StrategyBase` — metadata + optimization | — |
+| `supertrend_rsi.py` | 4 | Supertrend + RSI filter | 55-60% |
+| `vwap_orb.py` | 4 | VWAP ORB breakout | 60-70% |
+| `ema_adx.py` | 4 | EMA 9/21 + ADX filter | 55-60% |
+| `rsi_macd.py` | 4 | RSI + MACD confirm | 65-73% |
+| `vcp_breakout.py` | 4 | VCP Minervini method | 55-65% |
+| `volume_breakout.py` | 4 | Volume spike breakout | 52-58% |
+
+## 🛠️ Scripts (`backend/scripts/`)
+
+| File | Sprint | Purpose |
 |---|---|---|
-| **`health.py`** | Health Check | `GET /api/health` — Checks DB connectivity. Used by load balancers/monitoring. |
-| **`auth.py`** | Auth Endpoints | `POST /api/auth/login` — Rate-limited login endpoint returning JWT tokens. |
-| **`trades.py`** | Trade Endpoints | `GET/POST/PUT/DELETE /api/trades` — Full CRUD for trades. **JWT Protected.** |
-| **`watchlists.py`** | Watchlist Endpoints | `GET/POST/DELETE /api/watchlists` — CRUD for watchlists with upsert logic. |
+| `scan_hardcoded_secrets.py` | 1 | Pre-commit scanner — 11 regex patterns |
+| `verify_health.py` | 1 | Quick health check |
+| `quick_check.py` | 1 | 44-point end-to-end test |
+| `final_check.py` | 1 | Self-contained 314-line test (starts own server) |
+| `test_sprint2.py` | 2 | Sprint 2 broker integration tests |
+| `test_sprint2_live.py` | 2 | Sprint 2 live broker tests |
+| `test_sprint3.py` | 3 | 42-point AI engine test |
+| `test_tavily.py` | 3 | Tavily API key verification |
+| `verify_sprint4.py` | 4 | 6-step backtest verification |
 
-## 🛠️ Utilities & Scripts (`backend/scripts/`)
+## ⚙️ Config (`backend/`)
 
-| File | Purpose | Key Functionality |
-|---|---|---|
-| **`scan_hardcoded_secrets.py`** | Security Scanner | Pre-commit hook script. Scans code for 11 patterns of hardcoded secrets (API keys, passwords). **Blocks unsafe commits.** |
-
-## ⚙️ Project Config (`backend/`)
-
-| File | Purpose | Key Functionality |
-|---|---|---|
-| **`.env`** | Environment Variables | Stores secrets and config (DB URL, API Keys). **Not committed to Git.** |
-| **`.env.example`** | Environment Template | Safe template listing required variables without values. Committed to Git. |
-| **`.gitignore`** | Git Ignore | Lists files to exclude from version control (secrets, venv, logs, pycache). |
-| **`requirements.txt`** | Dependencies | List of Python packages required to run the app. |
-| **`run.py`** | Runner | Entry point script to start the Uvicorn server programmatically. |
+| File | Purpose |
+|---|---|
+| `.env` | Secrets — **NEVER in git** |
+| `.env.example` | Template (in git) |
+| `requirements.txt` | All Python deps (47 packages) |
+| `run.py` | Uvicorn starter — port 8000 |
+| `start_server.bat` | Windows batch to start server |

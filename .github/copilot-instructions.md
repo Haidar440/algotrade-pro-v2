@@ -44,8 +44,10 @@ algotrade-pro/
 │   │   ├── middleware.py       # CORS, request ID, error handler, timing
 │   │   ├── dependencies.py     # DI container
 │   │   ├── models/             # SQLAlchemy ORM + Pydantic schemas
-│   │   ├── routers/            # API endpoints (health, auth, trades, watchlists)
-│   │   └── security/           # vault.py (AES-256), auth.py (JWT)
+│   │   ├── routers/            # 7 routers (health, auth, trades, watchlists, broker, ai, backtest)
+│   │   ├── security/           # vault.py (AES-256), auth.py (JWT)
+│   │   ├── services/           # 14 services (broker, AI, backtest)
+│   │   └── strategies/         # 6 backtesting strategies
 │   ├── scripts/                # scan_hardcoded_secrets.py, verify_health.py
 │   ├── .env                    # Secrets (NOT in git)
 │   ├── .env.example            # Template (in git)
@@ -106,8 +108,8 @@ algotrade-pro/
 | ------------ | --------------------------------------------------------------------- | -------------- |
 | **Sprint 1** | Foundation: FastAPI + PostgreSQL + Auth + CRUD (24 files)             | ✅ COMPLETE    |
 | **Sprint 2** | Broker Integration: Angel One + Zerodha + Paper Trader + Risk Manager | ✅ COMPLETE    |
-| **Sprint 3** | AI Engine: LangChain + Gemini + Tavily + Smart Stock Picker           | ❌ NOT STARTED |
-| **Sprint 4** | Backtesting: Engine + 6 strategies + Optimization                     | ❌ NOT STARTED |
+| **Sprint 3** | AI Engine: LangChain + Gemini + Tavily + Smart Stock Picker (7 files) | ✅ COMPLETE    |
+| **Sprint 4** | Backtesting: Engine + 6 strategies + Optimization                     | ✅ COMPLETE    |
 | **Sprint 5** | Frontend: Connect React + Telegram Bot                                | ❌ NOT STARTED |
 | **Sprint 6** | Advanced: 6 AI Agents + ML Prediction + Real-time WebSocket           | ❌ NOT STARTED |
 
@@ -141,3 +143,36 @@ algotrade-pro/
 
 **Every time a file is created, updated, or deleted — update `docs/PROJECT_RECORD.md`.**
 That file is the master record of every file in the project, what it does, and the full changelog.
+
+---
+
+## Sprint 3 Files (AI & Analysis Engine)
+
+| File                                | Purpose                                                  |
+| ----------------------------------- | -------------------------------------------------------- |
+| `app/services/technical.py`         | TechnicalAnalyzer — 15+ indicators via pandas-ta         |
+| `app/services/ai_engine.py`         | AIEngine — LangChain + Gemini 2.0 Flash                  |
+| `app/services/tavily_search.py`     | TavilySearchService — real-time market news               |
+| `app/services/stock_picker.py`      | StockPicker — 10-layer scoring (100 pts)                  |
+| `app/services/analytics.py`         | PerformanceAnalytics — Sharpe, drawdown, win rate         |
+| `app/routers/ai.py`                 | 5 AI endpoints (analyze, predict, news, picks, analytics) |
+| `scripts/test_sprint3.py`           | 42-point Sprint 3 test suite                              |
+
+---
+
+## Sprint 4 Files (Backtesting Engine)
+
+| File                                | Purpose                                          |
+| ----------------------------------- | ------------------------------------------------ |
+| `app/services/data_provider.py`     | Multi-tier data: Angel → yfinance → demo         |
+| `app/services/backtest_engine.py`   | BacktestEngine — 0.2% costs, HTML charts         |
+| `app/strategies/__init__.py`        | Lazy strategy registry                            |
+| `app/strategies/base.py`            | StrategyBase — metadata + optimization            |
+| `app/strategies/supertrend_rsi.py`  | Supertrend + RSI filter (55-60%)                  |
+| `app/strategies/vwap_orb.py`        | VWAP ORB breakout (60-70%)                        |
+| `app/strategies/ema_adx.py`         | EMA 9/21 + ADX trend filter (55-60%)              |
+| `app/strategies/rsi_macd.py`        | RSI + MACD confirmation (65-73%)                  |
+| `app/strategies/vcp_breakout.py`    | VCP Minervini method (55-65%)                     |
+| `app/strategies/volume_breakout.py` | Volume spike breakout (52-58%)                    |
+| `app/routers/backtest.py`           | 3 endpoints (strategies, run, optimize)           |
+| `scripts/verify_sprint4.py`         | 6-step backtesting verification                   |

@@ -22,7 +22,7 @@ from app.config import settings
 from app.database import close_db, init_db
 from app.logging_config import setup_logging
 from app.middleware import setup_exception_handlers, setup_middleware
-from app.routers import auth, broker, health, trades, watchlists
+from app.routers import ai, auth, backtest, broker, health, trades, watchlists
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +84,8 @@ app.include_router(auth.router)
 app.include_router(trades.router)
 app.include_router(watchlists.router)
 app.include_router(broker.router)
+app.include_router(ai.router)
+app.include_router(backtest.router)
 
 
 # ━━━━━━━━━━━━━━━ Root ━━━━━━━━━━━━━━━

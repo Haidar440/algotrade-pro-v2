@@ -10,18 +10,16 @@ import logging
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.security import OAuth2PasswordRequestForm
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from app.config import settings
 from app.exceptions import UnauthorizedError
+from app.middleware import limiter
 from app.models.schemas import ApiResponse, LoginRequest, TokenResponse
 from app.security.auth import create_access_token, hash_password, verify_password
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
-limiter = Limiter(key_func=get_remote_address, config_filename=None)
 
 # ━━━━━━━━━━━━━━━ Temporary In-Memory Users ━━━━━━━━━━━━━━━
 # TODO: Replace with database Users table in Sprint 2.

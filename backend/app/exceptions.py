@@ -155,3 +155,17 @@ class BrokerNotConfiguredError(AlgoTradeError):
             error_code="BROKER_NOT_CONFIGURED",
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
+
+
+# ━━━━━━━━━━━━━━━ Service Errors (503) ━━━━━━━━━━━━━━━
+
+
+class ServiceUnavailableError(AlgoTradeError):
+    """Raised when an external service (AI, search, etc.) is unavailable."""
+
+    def __init__(self, message: str = "Service is temporarily unavailable.") -> None:
+        super().__init__(
+            message=message,
+            error_code="SERVICE_UNAVAILABLE",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )

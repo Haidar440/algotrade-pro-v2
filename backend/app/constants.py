@@ -131,3 +131,20 @@ class AuditCategory(str, Enum):
     SYSTEM = "SYSTEM"
     BROKER = "BROKER"
     RISK = "RISK"
+
+
+# ── Backtesting (Sprint 4) ──
+
+
+class StrategyType(str, Enum):
+    """Trading strategy type classification."""
+    SWING = "SWING"
+    INTRADAY = "INTRADAY"
+    BOTH = "BOTH"
+
+
+class BacktestStatus(str, Enum):
+    """Backtest execution status."""
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+

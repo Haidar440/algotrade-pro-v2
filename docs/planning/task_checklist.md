@@ -51,3 +51,65 @@
 - [x] Test import chain works
 - [x] Run hardcode scanner on new code
 - [x] Verify file structure is correct
+
+---
+
+## Sprint 2: Broker Integration ✅ COMPLETE
+
+### Services
+- [x] `app/services/__init__.py` — Package init
+- [x] `app/services/broker_interface.py` — ABC + 4 dataclasses + 10 abstract methods
+- [x] `app/services/angel_broker.py` — Angel One SmartAPI integration
+- [x] `app/services/zerodha_broker.py` — Zerodha KiteConnect integration
+- [x] `app/services/paper_trader.py` — Virtual trading engine (₹1,00,000 capital)
+- [x] `app/services/risk_manager.py` — 6 pre-trade safety checks + kill switch
+- [x] `app/services/broker_factory.py` — `create_broker()` factory function
+
+### Router
+- [x] `app/routers/broker.py` — 13 endpoints for broker operations
+
+### Updated Files
+- [x] `app/models/schemas.py` — Added 7 broker/order/position/risk schemas
+- [x] `app/main.py` — Wired broker router
+- [x] `requirements.txt` — Added smartapi-python, kiteconnect, pyotp, logzero, websocket-client
+
+### Testing
+- [x] `scripts/test_sprint2.py` — Import test (10/10 ✅)
+- [x] `scripts/test_sprint2_live.py` — Live endpoint test (full paper trading flow ✅)
+
+---
+
+## Sprint 3: AI & Analysis Engine ✅ COMPLETE
+
+### Services
+- [x] `app/services/technical.py` — TechnicalAnalyzer (15+ pandas-ta indicators)
+- [x] `app/services/ai_engine.py` — AIEngine (LangChain + Gemini 2.0 Flash)
+- [x] `app/services/tavily_search.py` — TavilySearchService (real-time news)
+- [x] `app/services/stock_picker.py` — StockPicker (10-layer scoring)
+- [x] `app/services/analytics.py` — PerformanceAnalytics (Sharpe, drawdown, streaks)
+
+### Router
+- [x] `app/routers/ai.py` — 5 AI endpoints (analyze, predict, news, picks, analytics)
+
+### Updated Files
+- [x] `app/models/schemas.py` — Added 9 AI/analysis schemas (total now 27)
+- [x] `app/exceptions.py` — Added `ServiceUnavailableError` (HTTP 503)
+- [x] `app/main.py` — Wired AI router
+- [x] `requirements.txt` — Added langchain, langchain-google-genai, langchain-community, tavily-python, pandas-ta
+
+### Testing
+- [x] `scripts/test_sprint3.py` — 42-point test (42/42 ✅)
+- [x] `scripts/test_tavily.py` — Tavily API key verification ✅
+
+---
+
+## Sprint 4: Backtesting Engine + 6 Strategies — NEXT
+- [ ] `app/services/backtest_engine.py` — Visual backtesting (backtesting.py)
+- [ ] `app/routers/backtest.py` — Backtest endpoints
+- [ ] `app/strategies/base.py` — Strategy base class
+- [ ] `app/strategies/orb.py` — Opening Range Breakout
+- [ ] `app/strategies/vcp.py` — VCP Breakout
+- [ ] `app/strategies/rsi_reversion.py` — RSI Mean Reversion
+- [ ] `app/strategies/ema_crossover.py` — EMA 9/21 Crossover
+- [ ] `app/strategies/supertrend.py` — Supertrend
+- [ ] `app/strategies/volume_breakout.py` — Volume Breakout

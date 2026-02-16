@@ -1,8 +1,8 @@
 # AlgoTrade Pro — Agent Context (Transferable)
 
 > **Purpose:** Paste this entire file into ANY AI coding agent (Antigravity IDE, Claude, Gemini, ChatGPT, Cursor, etc.) so it can continue building this project from where we left off.
-> **Last Updated:** 2025-02-12
-> **Sprints Complete:** Sprint 1 ✅ + Sprint 2 ✅ (out of 6 total)
+> **Last Updated:** 2026-02-15
+> **Sprints Complete:** Sprint 1 + Sprint 2 + Sprint 3 + Sprint 4 (out of 6 total)
 
 ---
 
@@ -10,7 +10,7 @@
 
 You are resuming work on **AlgoTrade Pro** — a production-grade algorithmic trading platform for Indian stock markets (NSE/BSE). The project was started in Google's Antigravity IDE (Gemini + Claude agents), migrated to VS Code (GitHub Copilot), and is now being handed to you.
 
-**Your role:** Continue building from Sprint 3 onward. Follow all coding standards exactly. Never hardcode secrets. Update `docs/PROJECT_RECORD.md` after every file change.
+**Your role:** Continue building from Sprint 4 onward. Follow all coding standards exactly. Never hardcode secrets. Update `docs/PROJECT_RECORD.md` after every file change.
 
 ---
 
@@ -33,10 +33,10 @@ You are resuming work on **AlgoTrade Pro** — a production-grade algorithmic tr
 algotrade-pro/
 ├── backend/                        # Python FastAPI (ACTIVE)
 │   ├── app/
-│   │   ├── main.py                 # FastAPI entry point — wires 5 routers
+│   │   ├── main.py                 # FastAPI entry point — wires 6 routers
 │   │   ├── config.py               # ONLY env reader (Pydantic Settings)
 │   │   ├── constants.py            # 13 Enums (zero magic strings)
-│   │   ├── exceptions.py           # 10 custom exceptions
+│   │   ├── exceptions.py           # 11 custom exceptions
 │   │   ├── logging_config.py       # 4 log handlers
 │   │   ├── database.py             # Async PostgreSQL (SQLAlchemy 2.0)
 │   │   ├── middleware.py           # CORS, request ID, error handler, timing
@@ -47,28 +47,48 @@ algotrade-pro/
 │   │   │   ├── watchlist.py        # Watchlist ORM (JSONB items)
 │   │   │   ├── instrument.py       # Instrument ORM (NSE/BSE tokens)
 │   │   │   ├── audit.py            # AuditLog ORM (append-only)
-│   │   │   └── schemas.py          # 18 Pydantic schemas
+│   │   │   └── schemas.py          # 27 Pydantic schemas
 │   │   ├── routers/
 │   │   │   ├── health.py           # GET /api/health (no auth)
 │   │   │   ├── auth.py             # POST /api/auth/login + /token
 │   │   │   ├── trades.py           # CRUD — 5 endpoints
 │   │   │   ├── watchlists.py       # CRUD — 5 endpoints
-│   │   │   └── broker.py           # 13 broker endpoints
+│   │   │   ├── broker.py           # 13 broker endpoints
+│   │   │   └── ai.py               # 5 AI endpoints (Sprint 3)
 │   │   ├── security/
 │   │   │   ├── auth.py             # JWT + password hashing
 │   │   │   └── vault.py            # Fernet AES-256 encrypt/decrypt
-│   │   └── services/               # ← Sprint 2 lives here
-│   │       ├── broker_interface.py  # ABC + 4 dataclasses (OrderRequest, OrderResponse, Position, Holding)
-│   │       ├── angel_broker.py      # Angel One SmartAPI
-│   │       ├── zerodha_broker.py    # Zerodha KiteConnect
-│   │       ├── paper_trader.py      # Virtual trading (₹1,00,000 capital)
-│   │       ├── risk_manager.py      # 6 pre-trade checks + kill switch
-│   │       └── broker_factory.py    # create_broker() factory function
+│   │   ├── services/               # ← Sprint 2 + Sprint 3 + Sprint 4
+│   │   │   ├── broker_interface.py  # ABC + 4 dataclasses
+│   │   │   ├── angel_broker.py      # Angel One SmartAPI
+│   │   │   ├── zerodha_broker.py    # Zerodha KiteConnect
+│   │   │   ├── paper_trader.py      # Virtual trading
+│   │   │   ├── risk_manager.py      # 6 pre-trade checks
+│   │   │   ├── broker_factory.py    # create_broker() factory
+│   │   │   ├── technical.py         # TechnicalAnalyzer (pandas-ta)
+│   │   │   ├── ai_engine.py         # AIEngine (LangChain + Gemini)
+│   │   │   ├── tavily_search.py     # TavilySearchService
+│   │   │   ├── stock_picker.py      # StockPicker (10-layer scoring)
+│   │   │   ├── analytics.py         # PerformanceAnalytics
+│   │   │   ├── data_provider.py     # Multi-tier data (Sprint 4)
+│   │   │   └── backtest_engine.py   # BacktestEngine (Sprint 4)
+│   │   └── strategies/              # ← Sprint 4: 6 strategies
+│   │       ├── __init__.py          # Lazy strategy registry
+│   │       ├── base.py              # StrategyBase (metadata + optimization)
+│   │       ├── supertrend_rsi.py    # Supertrend + RSI (55-60%)
+│   │       ├── vwap_orb.py          # VWAP ORB (60-70%)
+│   │       ├── ema_adx.py           # EMA 9/21 + ADX (55-60%)
+│   │       ├── rsi_macd.py          # RSI + MACD (65-73%)
+│   │       ├── vcp_breakout.py      # VCP Minervini (55-65%)
+│   │       └── volume_breakout.py   # Volume Breakout (52-58%)
 │   ├── scripts/
 │   │   ├── scan_hardcoded_secrets.py  # Pre-commit scanner (11 regex)
 │   │   ├── verify_health.py
+│   │   ├── quick_check.py             # Sprint 1+2 test (44/44 ✅)
 │   │   ├── test_sprint2.py            # Import test (10/10 ✅)
-│   │   └── test_sprint2_live.py       # Live endpoint test ✅
+│   │   ├── test_sprint2_live.py       # Live endpoint test ✅
+│   │   ├── test_sprint3.py            # Sprint 3 full test (42/42 ✅)
+│   │   └── test_tavily.py             # Tavily API key verification ✅
 │   ├── .env                         # Secrets (NEVER in git) — has real Angel One creds
 │   ├── .env.example                 # Template (in git)
 │   ├── requirements.txt             # All Python deps
@@ -272,46 +292,33 @@ get_historical_data(symbol, exchange, interval, from_date, to_date) → list[dic
 
 ## 🚀 WHAT TO BUILD NEXT
 
-### Sprint 3 — AI Engine (LangChain + Gemini + Tavily + Smart Stock Picker)
+### Sprint 3 — AI Engine ✅ COMPLETE
 
-**Scope:** Set up AI analysis pipeline — technical analysis with pandas-ta, news search with Tavily, AI reasoning with Gemini, and a Smart Stock Picker that combines everything.
+Built in VS Code (GitHub Copilot), tested end-to-end:
 
-**Files to create:**
+- **TechnicalAnalyzer** — 15+ indicators via pandas-ta (RSI, MACD, EMA 9/21/50/200, Bollinger, ADX, Supertrend, ATR, MFI, OBV). Composite scoring 0-100, signals: STRONG_BUY/BUY/SELL/NO_TRADE.
+- **AIEngine** — LangChain + Gemini 2.0 Flash analysis chain. JSON output enforced, sanitized text, fallback to pure technical when AI fails.
+- **TavilySearchService** — Real-time news search (stock, sector, market). Graceful fallback when key not set. Combined text capped at 3000 chars for AI consumption.
+- **StockPicker** — 10-layer scoring (Technical 40pts, Volume 20pts, Strength 15pts, Fundamentals 15pts, News 10pts). Capital-aware position sizing, 2:1 risk-reward.
+- **PerformanceAnalytics** — Sharpe ratio, max drawdown, win rate, profit factor, expectancy, best/worst streaks.
+- **AI Router** — 5 JWT-protected endpoints: `/api/ai/analyze/{symbol}`, `/api/ai/predict/{symbol}`, `/api/ai/news/{symbol}`, `/api/ai/picks`, `/api/ai/analytics`
+- **Test:** ALL 42 CHECKS PASSED. Tavily API verified with real news results.
 
-| File                            | Purpose                                                                                                                                                                         |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `app/services/technical.py`     | Technical analysis using pandas-ta (130+ indicators). Replace the old 20-line TypeScript RSI with 2-line `ta.rsi()`. Calculate RSI, MACD, EMA, Bollinger, ADX, Supertrend, etc. |
-| `app/services/ai_engine.py`     | LangChain + Gemini integration. Build an analysis chain: stock data → technical indicators → AI reasoning → BUY/SELL/HOLD recommendation with confidence score.                 |
-| `app/services/tavily_search.py` | Tavily Search for real-time market intelligence. Search latest news about a stock, sector, or market event. Feed results to Gemini for sentiment analysis.                      |
-| `app/services/stock_picker.py`  | Smart Stock Picker — scans NSE stocks, applies technical filters, gets AI analysis, ranks by composite score, returns top picks with entry/SL/target.                           |
-| `app/services/analytics.py`     | Performance analytics — Sharpe ratio, max drawdown, win rate, profit factor, best/worst streaks. Analyzes trade history.                                                        |
-| `app/routers/ai.py`             | AI endpoints — `/api/ai/analyze/{symbol}`, `/api/ai/news/{symbol}`, `/api/ai/picks`, `/api/ai/analytics`                                                                        |
+### Sprint 4 — Backtesting Engine + 6 Strategies ✅ COMPLETE
 
-**New dependencies:**
+Built in VS Code (Antigravity IDE), all 6 strategies verified on real RELIANCE.NS data:
 
-```
-langchain>=0.3.0
-langchain-google-genai>=2.0.0
-langchain-community>=0.3.0
-tavily-python>=0.5.0
-pandas-ta>=0.3.14
-```
-
-**Key implementation notes:**
-
-- Gemini model: `gemini-2.0-flash` (fast, good for analysis)
-- Tavily: `search_depth="advanced"`, `max_results=5`
-- All API keys from `settings` (GEMINI_API_KEY, TAVILY_API_KEY)
-- Stock picker should work with ₹13,500 capital (user's actual trading capital)
-- Technical analysis: RSI, MACD, EMA (9/21/50/200), Bollinger Bands, ADX, Supertrend, Volume ratio
-- AI output must be sanitized — never return raw LLM text to client
-
-### Sprint 4 — Backtesting Engine + 6 Strategies
-
-**Files:** `app/services/backtest_engine.py`, `app/routers/backtest.py`
-**Library:** `backtesting.py` (interactive HTML charts)
-**6 strategies:** Opening Range Breakout, VCP Breakout, RSI Mean Reversion, EMA 9/21 Crossover, Supertrend, Volume Breakout
-**Features:** Parameter optimization, visual charts, strategy comparison
+- **DataProvider** — Multi-tier data: Angel One → yfinance → demo. Cache (30min TTL). Timezone-naive output.
+- **BacktestEngine** — Wraps backtesting.py. 0.2% commission (brokerage+STT+slippage). HTML charts. Optimization (200 combos).
+- **6 Strategies** (all extend `StrategyBase`):
+  - Supertrend + RSI (55-60%) — custom Supertrend via pandas-ta ATR
+  - VWAP ORB (60-70%) — volume-confirmed breakouts, 66.67% win rate on real data
+  - EMA 9/21 + ADX (55-60%) — ADX > 25 trend filter
+  - RSI + MACD (65-73%) — best expected win rate
+  - VCP Minervini (55-65%) — Trend Template + 3:1 R:R
+  - Volume Breakout (52-58%) — institutional buying signal
+- **3 API endpoints:** strategies list, run backtest, optimize params
+- **Test:** VWAP ORB: 2.92% return, 6 trades, 66.67% win rate, chart generated ✅
 
 ### Sprint 5 — Frontend Connection + Telegram Bot
 
@@ -377,7 +384,7 @@ These old Node.js files still exist and should be deleted:
 
 ---
 
-## 🧪 VERIFIED API ENDPOINTS (26 total)
+## 🧪 VERIFIED API ENDPOINTS (31 total)
 
 | Method | Path                                      | Auth | Purpose                         |
 | ------ | ----------------------------------------- | ---- | ------------------------------- |
@@ -408,21 +415,27 @@ These old Node.js files still exist and should be deleted:
 | GET    | `/api/broker/risk/status`                 | JWT  | Risk manager status             |
 | POST   | `/api/broker/risk/kill-switch/activate`   | JWT  | Emergency stop                  |
 | POST   | `/api/broker/risk/kill-switch/deactivate` | JWT  | Resume trading                  |
+| GET    | `/api/ai/analyze/{symbol}`                | JWT  | Technical analysis (pandas-ta)  |
+| GET    | `/api/ai/predict/{symbol}`                | JWT  | AI prediction (Gemini)          |
+| GET    | `/api/ai/news/{symbol}`                   | JWT  | Stock news search (Tavily)      |
+| GET    | `/api/ai/picks`                           | JWT  | Smart stock picks (10-layer)    |
+| GET    | `/api/ai/analytics`                       | JWT  | Portfolio performance metrics   |
 
 ---
 
 ## 💡 TIPS FOR THE NEXT AGENT
 
 1. **Always read `docs/PROJECT_RECORD.md` first** — it's the source of truth for what exists.
-2. **Read `docs/planning/implementation_plan.md`** — it has the full Sprint 3-6 implementation details with code samples.
+2. **Read `docs/planning/implementation_plan.md`** — it has the full Sprint 4-6 implementation details with code samples.
 3. **Virtual environment:** `e:\algotrade-pro\backend\.venv` — activate before running anything.
-4. **Test login:** `admin / admin1234` → token at `body.data.access_token`.
+4. **Test login:** `admin / admin1234` → token at `data.access_token` (JSON body, not form data).
 5. **The user's real trading capital is ₹13,500** — use this for stock picker defaults.
 6. **The user has real Angel One credentials** in `.env` — never expose them.
-7. **GEMINI_API_KEY is set** in `.env` — ready for Sprint 3 AI integration.
-8. **Don't change existing Sprint 1/2 files** unless fixing bugs — they're tested and working.
-9. **The user prefers:** verbose output, detailed explanations, step-by-step testing.
-10. **Update PROJECT_RECORD.md** after EVERY file change — this is a firm rule.
+7. **GEMINI_API_KEY is set** in `.env` — Gemini AI fully working.
+8. **TAVILY_API_KEY is set** in `.env` — Tavily news search fully working.
+9. **Don't change existing Sprint 1/2/3 files** unless fixing bugs — they're tested and working.
+10. **The user prefers:** verbose output, detailed explanations, step-by-step testing.
+11. **Update PROJECT_RECORD.md** after EVERY file change — this is a firm rule.
 
 ---
 

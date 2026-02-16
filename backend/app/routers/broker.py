@@ -9,7 +9,7 @@ Orders go through the RiskManager before reaching the broker.
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from app.config import settings
 from app.constants import BrokerName, Exchange, OrderSide, OrderType
@@ -34,6 +34,8 @@ from app.services.broker_factory import create_broker
 from app.services.broker_interface import BrokerInterface, OrderRequest
 from app.services.paper_trader import PaperTrader
 from app.services.risk_manager import RiskManager
+
+from app.middleware import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -194,7 +196,9 @@ async def broker_status(
     summary="Place an order",
     description="Place an order through the connected broker. Runs risk checks first.",
 )
+@limiter.limit(settings.RATE_LIMIT_ORDERS)
 async def place_order(
+    request: Request,
     body: OrderCreateRequest,
     user: dict = Depends(get_current_user),
 ) -> ApiResponse[OrderResponseSchema]:
