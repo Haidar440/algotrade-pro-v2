@@ -11,22 +11,55 @@ import logging
 from fastapi import APIRouter, Depends, Request
 from fastapi.security import OAuth2PasswordRequestForm
 
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.config import settings
-from app.exceptions import UnauthorizedError
+from app.database import get_db
+from app.exceptions import BadRequestError, UnauthorizedError
 from app.middleware import limiter
-from app.models.schemas import ApiResponse, LoginRequest, TokenResponse
+from app.models.schemas import ApiResponse, LoginRequest, TokenResponse, UserCreate, UserResponse
+from app.models.user import User
 from app.security.auth import create_access_token, hash_password, verify_password
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
-# ━━━━━━━━━━━━━━━ Temporary In-Memory Users ━━━━━━━━━━━━━━━
-# TODO: Replace with database Users table in Sprint 2.
-# Passwords are bcrypt-hashed, never stored in plaintext.
-_USERS_DB: dict[str, str] = {
-    "admin": hash_password("admin1234"),
-}
+
+@router.post(
+    "/register",
+    response_model=ApiResponse[UserResponse],
+    summary="Register User",
+    description="Create a new user account.",
+)
+async def register(body: UserCreate, db: AsyncSession = Depends(get_db)) -> ApiResponse[UserResponse]:
+    """Register a new user."""
+    # Check if username exists
+    stmt = select(User).where(User.username == body.username)
+    result = await db.execute(stmt)
+    if result.scalar_one_or_none():
+        raise BadRequestError("Username already taken.")
+
+    # Check if email exists
+    stmt = select(User).where(User.email == body.email)
+    result = await db.execute(stmt)
+    if result.scalar_one_or_none():
+        raise BadRequestError("Email already registered.")
+
+    # Create user
+    new_user = User(
+        username=body.username,
+        email=body.email,
+        hashed_password=hash_password(body.password),
+    )
+    db.add(new_user)
+    await db.commit()
+    await db.refresh(new_user)
+
+    logger.info("New user registered: %s", body.username)
+    return ApiResponse(data=new_user, message="User registered successfully")
 
 
 @router.post(
@@ -36,27 +69,26 @@ _USERS_DB: dict[str, str] = {
     description="Authenticate with JSON body {username, password}, receive JWT token.",
 )
 @limiter.limit(settings.RATE_LIMIT_LOGIN)
-async def login(request: Request, body: LoginRequest) -> ApiResponse[TokenResponse]:
-    """Authenticate user and return a signed JWT token.
-
-    Args:
-        request: FastAPI request (required for rate limiter).
-        body: Login credentials (username + password).
-
-    Returns:
-        ApiResponse containing the JWT access token.
-
-    Raises:
-        UnauthorizedError: If credentials are invalid.
-    """
+async def login(
+    request: Request,
+    body: LoginRequest,
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponse[TokenResponse]:
+    """Authenticate user and return a signed JWT token."""
     # Look up user
-    stored_hash = _USERS_DB.get(body.username)
-    if not stored_hash or not verify_password(body.password, stored_hash):
+    stmt = select(User).where(User.username == body.username)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+
+    if not user or not verify_password(body.password, user.hashed_password):
         logger.warning("Failed login attempt for user=%s", body.username)
         raise UnauthorizedError("Invalid username or password.")
+    
+    if not user.is_active:
+        raise UnauthorizedError("Account is inactive.")
 
     # Generate JWT
-    token = create_access_token(subject=body.username)
+    token = create_access_token(subject=user.username)
     logger.info("User '%s' logged in successfully", body.username)
 
     return ApiResponse(
@@ -77,21 +109,14 @@ async def login(request: Request, body: LoginRequest) -> ApiResponse[TokenRespon
 async def login_oauth2_form(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
+    db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """OAuth2 form-based login for Swagger UI Authorize button.
+    """OAuth2 form-based login for Swagger UI Authorize button."""
+    stmt = select(User).where(User.username == form_data.username)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
 
-    Args:
-        request: FastAPI request (required for rate limiter).
-        form_data: OAuth2 form with username and password fields.
-
-    Returns:
-        OAuth2-compliant token response.
-
-    Raises:
-        UnauthorizedError: If credentials are invalid.
-    """
-    stored_hash = _USERS_DB.get(form_data.username)
-    if not stored_hash or not verify_password(form_data.password, stored_hash):
+    if not user or not verify_password(form_data.password, user.hashed_password):
         logger.warning("Failed login attempt for user=%s", form_data.username)
         raise UnauthorizedError("Invalid username or password.")
 

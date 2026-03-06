@@ -13,13 +13,17 @@ const WatchlistRow: React.FC<WatchlistRowProps> = ({ item, onAnalyze, onDelete }
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  // Determine styling based on signal
-  const isBuy = item.signal.includes('BUY');
+  // Safely determine styling based on signal (may be undefined for DB-only items)
+  const signal = item.signal || 'NEUTRAL';
+  const isBuy = signal.includes('BUY');
   const strokeColor = isBuy ? '#34d399' : '#fb7185'; // Emerald-400 or Rose-400
   
-  // Calculate distances for visual context
-  const distToEntry = ((item.entry - item.price) / item.price) * 100;
-  const distToTarget = ((item.target - item.price) / item.price) * 100;
+  // Calculate distances with safe defaults
+  const entryPrice = item.entry || item.price || 0;
+  const targetPrice = item.target || item.price || 0;
+  const currentPrice = item.price || 0;
+  const distToEntry = currentPrice > 0 ? ((entryPrice - currentPrice) / currentPrice) * 100 : 0;
+  const distToTarget = currentPrice > 0 ? ((targetPrice - currentPrice) / currentPrice) * 100 : 0;
   
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -56,11 +60,11 @@ const WatchlistRow: React.FC<WatchlistRowProps> = ({ item, onAnalyze, onDelete }
                <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider border ${
                  isBuy ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
                }`}>
-                 {item.signal}
+                 {signal}
                </span>
             </div>
             <div className="text-[10px] text-slate-400 font-medium tracking-wide">
-               {item.strategy}
+               {item.strategy || 'Equity'}
             </div>
           </div>
         </div>
@@ -76,9 +80,9 @@ const WatchlistRow: React.FC<WatchlistRowProps> = ({ item, onAnalyze, onDelete }
 
         {/* Right: Price & Metrics */}
         <div className="text-right min-w-[25%]">
-           <div className="font-mono font-bold text-white text-lg">₹{item.price.toFixed(2)}</div>
-           <div className={`text-[10px] font-bold flex justify-end gap-1 ${item.changePercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-              {item.changePercent >= 0 ? '+' : ''}{item.changePercent.toFixed(2)}%
+           <div className="font-mono font-bold text-white text-lg">₹{(item.price || 0).toFixed(2)}</div>
+           <div className={`text-[10px] font-bold flex justify-end gap-1 ${(item.changePercent || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {(item.changePercent || 0) >= 0 ? '+' : ''}{(item.changePercent || 0).toFixed(2)}%
            </div>
            
            <div className="mt-1 flex justify-end items-center gap-2 text-[9px] font-medium text-slate-500">

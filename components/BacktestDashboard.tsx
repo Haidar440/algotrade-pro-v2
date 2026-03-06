@@ -1,9 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { BacktestResult, BrokerState } from '../types';
-import { runStrategyBacktest } from '../services/backtestEngine';
-import { PlayCircle, Activity, Loader2, AlertTriangle, Lock, Info, TrendingUp, TrendingDown } from 'lucide-react';
+import { secureGet, securePost } from '../services/api';
+import { PlayCircle, Activity, Loader2, AlertTriangle, Lock, Info, TrendingUp, TrendingDown, Wifi, WifiOff, Database } from 'lucide-react';
 import { INDIAN_STOCKS } from '../services/stockData';
+
+/** Map frontend display names to backend registry keys */
+const STRATEGY_MAP: Record<string, string> = {
+  'Supertrend + RSI': 'supertrend_rsi',
+  'VWAP ORB': 'vwap_orb',
+  'EMA + ADX': 'ema_adx',
+  'RSI + MACD': 'rsi_macd',
+  'VCP Breakout': 'vcp_breakout',
+  'Volume Breakout': 'volume_breakout',
+};
 
 interface BacktestDashboardProps {
   brokerState?: BrokerState;
@@ -11,42 +21,100 @@ interface BacktestDashboardProps {
 
 const BacktestDashboard: React.FC<BacktestDashboardProps> = ({ brokerState }) => {
   const [selectedStock, setSelectedStock] = useState(INDIAN_STOCKS[0].symbol);
-  const [selectedStrategy, setSelectedStrategy] = useState<string>('VCP Setup');
+  const [selectedStrategy, setSelectedStrategy] = useState<string>('Supertrend + RSI');
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<BacktestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [backendStrategies, setBackendStrategies] = useState<any[]>([]);
+  const [dataSource, setDataSource] = useState<'auto' | 'angel_one' | 'yfinance'>('auto');
+  const [backendBrokerConnected, setBackendBrokerConnected] = useState(false);
+  const [backendBrokerName, setBackendBrokerName] = useState<string | null>(null);
+
+  // Check both: localStorage brokerState AND backend broker status
+  const isAngelConnected = backendBrokerConnected || !!(brokerState?.angel?.jwtToken);
+
+  // Fetch available strategies + broker status from backend on mount
+  useEffect(() => {
+    const loadStrategies = async () => {
+      try {
+        const data: any = await secureGet('/backtest/strategies');
+        if (Array.isArray(data)) setBackendStrategies(data);
+      } catch (e) { console.warn("Could not load strategies from backend"); }
+    };
+    const checkBrokerStatus = async () => {
+      try {
+        const data: any = await secureGet('/broker/status');
+        setBackendBrokerConnected(!!data?.connected);
+        setBackendBrokerName(data?.broker || null);
+      } catch (e) { console.warn("Could not check broker status"); }
+    };
+    loadStrategies();
+    checkBrokerStatus();
+  }, [brokerState]);
 
   const handleRunBacktest = async () => {
-    if (!brokerState?.angel) {
-       setError("Angel One connection required to fetch historical data.");
-       return;
-    }
-
     setIsRunning(true);
     setError(null);
     setResult(null);
     try {
-      const data = await runStrategyBacktest(selectedStock, selectedStrategy, brokerState);
-      setResult(data);
+      // Use backend API with selected data source
+      const backendStrategyName = STRATEGY_MAP[selectedStrategy] || selectedStrategy;
+      // Strip .NS suffix — backend handles it internally
+      const cleanSymbol = selectedStock.replace('.NS', '').replace(/-EQ$|-BE$|-BL$/, '');
+      const res: any = await securePost('/backtest/run', {
+        strategy_name: backendStrategyName,
+        symbol: cleanSymbol,
+        cash: 100000,
+        commission: 0.002,
+        days: 365,
+        data_source: dataSource === 'auto' ? null : dataSource,
+      });
+
+      if (!res?.success && res?.error) {
+        setError(res.error);
+        return;
+      }
+
+      // Map backend response to frontend BacktestResult type
+      const stats = res.stats || {};
+      const mappedResult: BacktestResult = {
+        symbol: selectedStock,
+        strategy: selectedStrategy,
+        trades: (res.trades || []).map((t: any, i: number) => ({
+          id: `tr_${i}`,
+          type: 'BUY',
+          entryDate: t.entry_date || '',
+          exitDate: t.exit_date || '',
+          entryPrice: t.entry_price || 0,
+          exitPrice: t.exit_price || 0,
+          quantity: t.size || 1,
+          pnl: t.pnl || 0,
+          roi: t.return_pct || 0,
+          holdingPeriod: t.duration || 1,
+        })),
+        equityCurve: (res.equity_curve || []).map((p: any) => ({
+          date: p.date || '',
+          equity: p.equity || 100000,
+        })),
+        metrics: {
+          totalTrades: stats.total_trades || 0,
+          winRate: stats.win_rate_pct || 0,
+          profitFactor: stats.profit_factor || 0,
+          netProfit: stats.return_pct ? (stats.return_pct / 100) * 100000 : 0,
+          maxDrawdown: stats.max_drawdown_pct || 0,
+          avgWin: stats.avg_trade_pct || 0,
+          avgLoss: stats.avg_trade_pct || 0,
+          expectancy: stats.expectancy || 0,
+        },
+      };
+
+      setResult(mappedResult);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Backtest Failed");
     } finally {
       setIsRunning(false);
     }
   };
-
-  if (!brokerState?.angel) {
-     return (
-       <div className="max-w-7xl mx-auto mt-10 p-8 text-center glass-panel border border-amber-500/20 rounded-2xl">
-          <Lock className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-white mb-2">Restricted Access</h2>
-          <p className="text-slate-400 mb-6">Real-World Backtesting requires access to historical market data via Angel One.</p>
-          <div className="inline-block bg-amber-500/10 text-amber-200 px-4 py-2 rounded-lg text-sm border border-amber-500/20">
-             Please go to Settings and connect your Angel One account.
-          </div>
-       </div>
-     );
-  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -59,7 +127,7 @@ const BacktestDashboard: React.FC<BacktestDashboardProps> = ({ brokerState }) =>
               <Activity className="text-purple-400" /> Strategy Backtester
             </h1>
             <p className="text-slate-400 text-sm mt-1">
-              Simulate strategies on 200 Days of Real Market Data
+              Simulate strategies on Real Market Data
             </p>
           </div>
           
@@ -77,17 +145,18 @@ const BacktestDashboard: React.FC<BacktestDashboardProps> = ({ brokerState }) =>
                onChange={(e) => setSelectedStrategy(e.target.value)}
                className="bg-slate-900 border border-slate-700 text-white text-sm rounded-lg focus:ring-purple-500 focus:border-purple-500 block p-2.5 outline-none"
              >
-                <option value="VCP Setup">VCP (Volatility Contraction)</option>
-                <option value="Trend Following (ADX)">Trend Following (ADX)</option>
-                <option value="Golden Cross">Golden Cross</option>
-                <option value="20-Day Breakout">20-Day Breakout</option>
-                <option value="VWAP Reversion">VWAP Reversion</option>
-                <option value="RSI Divergence">RSI Divergence</option>
-                <option value="Bollinger Squeeze">Bollinger Squeeze</option>
-                <option value="Volume Spread (VPA)">Volume Spread (VPA)</option>
-                <option value="50 EMA Pullback">50 EMA Pullback</option>
-                <option value="Inside Bar Breakout">Inside Bar Breakout</option>
-                <option value="MA Trend Ride">MA Trend Ride</option>
+                {Object.keys(STRATEGY_MAP).map(s => <option key={s} value={s}>{s}</option>)}
+             </select>
+
+             {/* Data Source Toggle */}
+             <select
+               value={dataSource}
+               onChange={(e) => setDataSource(e.target.value as 'auto' | 'angel_one' | 'yfinance')}
+               className="bg-slate-900 border border-slate-700 text-white text-sm rounded-lg focus:ring-purple-500 focus:border-purple-500 block p-2.5 outline-none"
+             >
+               <option value="auto">📡 Auto (Best Available)</option>
+               <option value="angel_one">🔴 Angel One (Live Data)</option>
+               <option value="yfinance">🟢 Yahoo Finance (Free)</option>
              </select>
 
              <button 
@@ -99,6 +168,27 @@ const BacktestDashboard: React.FC<BacktestDashboardProps> = ({ brokerState }) =>
                Run Test
              </button>
           </div>
+        </div>
+
+        {/* Data Source Status Bar */}
+        <div className="mt-4 flex items-center gap-3 text-xs">
+          {isAngelConnected ? (
+            <span className="flex items-center gap-1.5 text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-500/20">
+              <Wifi className="w-3 h-3" /> Angel One Connected
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-slate-500 bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
+              <WifiOff className="w-3 h-3" /> Angel One Not Connected
+            </span>
+          )}
+          <span className="flex items-center gap-1.5 text-blue-400 bg-blue-500/10 px-3 py-1.5 rounded-lg border border-blue-500/20">
+            <Database className="w-3 h-3" /> Yahoo Finance Available
+          </span>
+          {dataSource === 'angel_one' && !isAngelConnected && (
+            <span className="flex items-center gap-1.5 text-amber-400 bg-amber-500/10 px-3 py-1.5 rounded-lg border border-amber-500/20">
+              <AlertTriangle className="w-3 h-3" /> Connect Angel One in Settings to use live data
+            </span>
+          )}
         </div>
       </div>
 

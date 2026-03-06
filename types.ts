@@ -1,17 +1,21 @@
 // --- DOMAIN ENTITIES ---
 export interface Trade {
-  _id?: string;        // MongoDB ID (optional because new trades won't have it yet)
+  id?: number;         // PostgreSQL auto-increment ID
+  _id?: string;        // Legacy MongoDB ID (for backwards compat)
   symbol: string;
   entryPrice: number;
   quantity: number;
-  type: 'SWING' | 'INTRADAY';
-  status: 'OPEN' | 'CLOSED';
-  entryDate: string;   // Dates usually come as strings from API
+  type: 'SWING' | 'INTRADAY' | 'PAPER' | 'REAL';
+  status: 'OPEN' | 'CLOSED' | 'EXITING';
+  entryDate: string;
   exitDate?: string;
   exitPrice?: number;
   pnl?: number;
   strategy?: string;
   notes?: string;
+  source?: string;
+  target?: number;
+  stopLoss?: number;
 }
 // Split PORTFOLIO into REAL_PORTFOLIO and PAPER_TRADING
 export type View = 
@@ -19,11 +23,14 @@ export type View =
   | 'WATCHLIST' 
   | 'REAL_PORTFOLIO' 
   | 'PAPER_TRADING' 
-  | 'AUTO_TRADER'  // ✅ NEW
+  | 'AUTO_TRADER'
+  | 'TRADE_HISTORY'
   | 'BACKTEST' 
   | 'STRATEGIES' 
   | 'PYTHON_LAB' 
-  | 'NEWS';
+  | 'NEWS'
+  | 'AI_PICKS'
+  | 'ANALYTICS';
 export interface Stock {
   symbol: string;
   name: string;
@@ -109,6 +116,25 @@ export interface ZerodhaCredentials {
 export interface DhanCredentials {
   clientId: string;
   accessToken: string;
+}
+
+export interface DhanOrderRequest {
+  dhanClientId: string;
+  correlationId: string;
+  transactionType: string;
+  exchangeSegment: string;
+  productType: string;
+  orderType: string;
+  validity: string;
+  securityId: string;
+  quantity: number;
+  price?: number;
+  triggerPrice?: number;
+  disclosedQuantity?: number;
+  afterMarketOrder?: boolean;
+  amoTime?: string;
+  boProfitValue?: number;
+  boStopLossValue?: number;
 }
 
 export interface BrokerState {

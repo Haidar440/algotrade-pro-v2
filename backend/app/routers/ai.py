@@ -30,8 +30,10 @@ from app.models.schemas import (
 )
 from app.services.ai_engine import AIEngine, StockAnalysisInput
 from app.services.analytics import PerformanceAnalytics, TradeRecord
+from app.services.data_provider import DataProvider
+from app.services.gemini_news import GeminiNewsService
 from app.services.stock_picker import StockPicker
-from app.services.tavily_search import TavilySearchService
+from app.services.swing_screener import SwingScreener
 from app.services.technical import TechnicalAnalyzer
 
 logger = logging.getLogger(__name__)
@@ -41,9 +43,11 @@ router = APIRouter(prefix="/api/ai", tags=["AI & Analysis"])
 # ━━━━━━━━━━━━━━━ Service Singletons ━━━━━━━━━━━━━━━
 
 _analyzer = TechnicalAnalyzer()
-_search_service = TavilySearchService()
+_news_service = GeminiNewsService()
 _analytics = PerformanceAnalytics()
 _picker = StockPicker(analyzer=_analyzer)
+_data_provider = DataProvider()  # Default: yfinance → demo
+_swing_screener = SwingScreener()
 
 # Lazy-init AI engine (needs GEMINI_API_KEY)
 _ai_engine: Optional[AIEngine] = None
@@ -57,6 +61,140 @@ def _get_ai_engine() -> AIEngine:
             raise ServiceUnavailableError("GEMINI_API_KEY not configured")
         _ai_engine = AIEngine()
     return _ai_engine
+
+
+# NSE trading series suffixes used by Angel One SmartAPI
+_NSE_SUFFIXES = ("-EQ", "-BE", "-BL", "-AF", "-IQ", "-RL",
+                 "-SL", "-SM", "-SQ", "-ST", "-RV", "-MF")
+
+
+def _strip_nse_suffix(symbol: str) -> str:
+    """Strip NSE trading series suffix from Angel One symbols.
+
+    Angel One uses suffixes like IDEA-EQ, RELIANCE-BE, TCS-BL.
+    yfinance and demo data expect plain symbols: IDEA, RELIANCE, TCS.
+
+    Args:
+        symbol: Symbol with optional NSE suffix (e.g., "IDEA-EQ").
+
+    Returns:
+        Clean symbol without suffix (e.g., "IDEA").
+    """
+    upper = symbol.upper()
+    for suffix in _NSE_SUFFIXES:
+        if upper.endswith(suffix):
+            return upper[: -len(suffix)]
+    return upper
+
+
+def _derive_sentiment_from_text(text: str) -> tuple[str, float]:
+    """Derive sentiment label and score (-100 to 100) from text keywords.
+
+    Used as fallback when Gemini AI is unavailable. Scans text
+    for bullish/bearish keywords and returns a sentiment + score.
+
+    Args:
+        text: The text to analyze.
+
+    Returns:
+        Tuple of (sentiment_label, score) where score is -100 to 100.
+    """
+    text_lower = text.lower()
+    bull_words = [
+        "growth", "surge", "surges", "rally", "rallies", "bullish",
+        "gain", "gains", "profit", "profits", "upgrade", "upgraded",
+        "positive", "strong", "stronger", "outperform", "beat", "beats",
+        "recovery", "bounce", "breakout", "uptrend", "record high",
+        "buy", "accumulate", "optimistic", "dividend",
+    ]
+    bear_words = [
+        "decline", "declines", "fall", "falls", "fell", "bearish",
+        "loss", "losses", "downgrade", "downgraded",
+        "negative", "weak", "weaker", "weakness", "underperform",
+        "crash", "crashed", "sell", "strong sell",
+        "concern", "concerns", "risk", "pressure",
+        "52-week low", "low", "slump", "headwinds",
+        "deteriorating", "distress", "debt", "correction",
+        "downward", "plunge", "plunges",
+    ]
+    bull_count = sum(1 for w in bull_words if w in text_lower)
+    bear_count = sum(1 for w in bear_words if w in text_lower)
+
+    if bull_count > bear_count:
+        diff = bull_count - bear_count
+        score = min(diff * 15, 80)  # Scale to -100..100 range
+        return "BULLISH", score
+    elif bear_count > bull_count:
+        diff = bear_count - bull_count
+        score = max(-diff * 15, -80)
+        return "BEARISH", score
+    else:
+        return "NEUTRAL", 0
+
+
+async def _get_stock_data(symbol: str, days: int = 100, use_broker: bool = True) -> pd.DataFrame:
+    """Fetch real OHLCV data: Angel One → yfinance → demo fallback.
+
+    Uses the active broker connection (if available) for real-time data,
+    then falls back to yfinance, then demo data.
+
+    For bulk operations (AI picks scanning 50 stocks), set use_broker=False
+    to skip Angel One (too slow for batch — ~2-3s per stock API latency).
+    Angel One is used for single-stock endpoints (/analyze, /predict).
+
+    DataProvider returns capitalized columns (Open, High, Low, Close, Volume)
+    for backtesting.py. TechnicalAnalyzer expects lowercase. This helper
+    normalizes the columns.
+
+    Also strips NSE trading series suffixes (-EQ, -BE, -BL, -AF, -IQ, -RL)
+    from Angel One symbols before passing to yfinance, since yfinance
+    expects plain symbols (e.g., "IDEA", not "IDEA-EQ").
+
+    Args:
+        symbol: Stock symbol (e.g., "RELIANCE", "IDEA-EQ").
+        days: Number of historical days.
+        use_broker: If True, try Angel One first. If False, skip to yfinance.
+
+    Returns:
+        DataFrame with lowercase columns: open, high, low, close, volume.
+    """
+    # Strip NSE series suffixes for yfinance compatibility
+    # Angel One uses IDEA-EQ, RELIANCE-BE, etc. yfinance needs IDEA, RELIANCE
+    clean_symbol = _strip_nse_suffix(symbol)
+
+    # ── Dynamically attach/detach active broker to DataProvider ──
+    # This ensures Angel One is used as Tier 1 when connected AND requested
+    if use_broker:
+        try:
+            from app.routers.broker import get_active_broker_optional
+
+            broker = get_active_broker_optional()
+            if broker is not None and _data_provider._angel_broker is None:
+                _data_provider._angel_broker = broker
+                logger.info("🔗 Angel One broker attached to AI DataProvider")
+            elif broker is None and _data_provider._angel_broker is not None:
+                _data_provider._angel_broker = None
+                logger.debug("Angel One broker detached from AI DataProvider")
+        except Exception:
+            pass  # broker module not available, skip
+
+    # Choose data source based on use_broker flag
+    data_source = None if use_broker else "yfinance"
+
+    try:
+        df = await _data_provider.get_ohlcv(clean_symbol, days=days, data_source=data_source)
+        if df is not None and not df.empty:
+            # Normalize column names to lowercase for TechnicalAnalyzer
+            df.columns = [c.lower() for c in df.columns]
+            source = "Angel One → yfinance" if use_broker else "yfinance"
+            logger.info("Data loaded for %s: %d rows (source: %s)", symbol, len(df), source)
+            return df
+    except Exception as e:
+        logger.warning("DataProvider failed for %s: %s — falling back to demo", symbol, e)
+
+    # Fallback: demo data
+    logger.info("Using demo data for %s", symbol)
+    return _generate_demo_ohlcv(clean_symbol)
 
 
 # ━━━━━━━━━━━━━━━ Demo Data Helper ━━━━━━━━━━━━━━━
@@ -97,8 +235,8 @@ def _generate_demo_ohlcv(symbol: str, days: int = 100) -> pd.DataFrame:
 
     closes = prices[1:]
     opens = [c * (1 + rng.normal(0, 0.005)) for c in closes]
-    highs = [max(o, c) * (1 + abs(rng.normal(0, 0.01))) for o, c in zip(opens, closes)]
-    lows = [min(o, c) * (1 - abs(rng.normal(0, 0.01))) for o, c in zip(opens, closes)]
+    highs = [max(float(o), float(c)) * (1 + abs(rng.normal(0, 0.01))) for o, c in zip(opens, closes)]
+    lows = [min(float(o), float(c)) * (1 - abs(rng.normal(0, 0.01))) for o, c in zip(opens, closes)]
     volumes = [int(rng.uniform(500_000, 5_000_000)) for _ in closes]
 
     return pd.DataFrame({
@@ -137,8 +275,8 @@ async def analyze_stock(
     symbol = symbol.upper()
     logger.info("Technical analysis requested for %s by user=%s", symbol, user.get("sub"))
 
-    # TODO: Replace with real broker data in production
-    df = _generate_demo_ohlcv(symbol)
+    # Fetch real market data (yfinance → demo fallback)
+    df = await _get_stock_data(symbol)
     result = _analyzer.analyze(df)
 
     return ApiResponse(
@@ -208,16 +346,20 @@ async def predict_stock(
     logger.info("AI prediction requested for %s by user=%s", symbol, user.get("sub"))
 
     engine = _get_ai_engine()
+    clean_sym = _strip_nse_suffix(symbol)
 
-    # Get technical analysis first
-    df = _generate_demo_ohlcv(symbol)
+    # Fetch real market data (yfinance → demo fallback)
+    df = await _get_stock_data(symbol)
     ta_result = _analyzer.analyze(df)
 
-    # Get news if Tavily is available
+    # Get news if Gemini news service is available (use clean symbol for better search)
     news_summary = None
-    if _search_service.is_enabled:
-        news = await _search_service.search_stock_news(symbol, max_results=3)
-        news_summary = news.combined_text if news.article_count > 0 else None
+    if _news_service.is_enabled:
+        try:
+            news = await _news_service.get_stock_news(clean_sym, max_articles=3)
+            news_summary = news.combined_text if news.article_count > 0 else news.summary or None
+        except Exception as e:
+            logger.warning("News fetch for prediction failed: %s", e)
 
     # Build AI input
     ai_input = StockAnalysisInput(
@@ -262,66 +404,57 @@ async def predict_stock(
 @router.get(
     "/news/{symbol}",
     response_model=ApiResponse[NewsSearchSchema],
-    summary="Stock News",
-    description="Search latest news for a stock with optional AI sentiment analysis.",
+    summary="Stock News Intelligence",
+    description="Get latest stock news with AI sentiment analysis powered by Gemini + Google Search.",
 )
 async def get_stock_news(
     symbol: str,
-    with_sentiment: bool = Query(default=False, description="Include AI sentiment analysis"),
+    with_sentiment: bool = Query(default=False, description="Include AI sentiment analysis (always true with Gemini)"),
     user: dict = Depends(get_current_user),
 ) -> ApiResponse[NewsSearchSchema]:
-    """Search for latest news about a stock.
+    """Get real-time stock news intelligence using Gemini + Google Search.
 
-    Optionally includes AI-powered sentiment analysis via Gemini.
+    Gemini searches Google for latest news, analyzes sentiment,
+    extracts key drivers and risk factors -- all in one call.
+    No separate search API needed.
 
     Args:
-        symbol: Stock symbol.
-        with_sentiment: Whether to run AI sentiment analysis on results.
+        symbol: Stock symbol (e.g., RELIANCE, IDEA, TCS).
+        with_sentiment: Ignored -- Gemini always provides sentiment.
         user: Authenticated user.
 
     Returns:
-        ApiResponse with news articles and optional sentiment.
+        ApiResponse with news articles, sentiment, key drivers, risk factors.
     """
     symbol = symbol.upper()
-    logger.info("News search for %s by user=%s", symbol, user.get("sub"))
+    logger.info("News intelligence for %s by user=%s", symbol, user.get("sub"))
 
-    news = await _search_service.search_stock_news(symbol, max_results=5)
-
-    sentiment = None
-    sentiment_score = None
-    sentiment_summary = None
-
-    if with_sentiment and news.article_count > 0:
-        try:
-            engine = _get_ai_engine()
-            result = await engine.get_sentiment_analysis(symbol, news.combined_text)
-            sentiment = result["sentiment"]
-            sentiment_score = result["score"]
-            sentiment_summary = result["summary"]
-        except Exception as e:
-            logger.warning("Sentiment analysis failed: %s", e)
+    clean_sym = _strip_nse_suffix(symbol)
+    result = await _news_service.get_stock_news(clean_sym, max_articles=5)
 
     return ApiResponse(
         data=NewsSearchSchema(
             symbol=symbol,
-            query=news.query,
+            query=result.query,
             articles=[
                 NewsArticleSchema(
                     title=a.title,
                     url=a.url,
                     content=a.content,
                     score=a.score,
+                    published_date=a.published_date,
+                    source=a.source,
                 )
-                for a in news.articles
+                for a in result.articles
             ],
-            sentiment=sentiment,
-            sentiment_score=sentiment_score,
-            sentiment_summary=sentiment_summary,
-            article_count=news.article_count,
+            sentiment=result.sentiment,
+            sentiment_score=result.sentiment_score,
+            sentiment_summary=result.summary,
+            article_count=result.article_count,
+            key_drivers=result.key_drivers,
+            risk_factors=result.risk_factors,
         ),
-        message=f"News for {symbol}" + (
-            f" (sentiment: {sentiment})" if sentiment else ""
-        ),
+        message=f"News for {symbol} (sentiment: {result.sentiment})",
     )
 
 
@@ -339,8 +472,9 @@ async def get_stock_picks(
 ) -> ApiResponse[StockPicksResponse]:
     """Get smart stock picks tailored to your capital.
 
-    Scans stocks, applies technical scoring, and returns top picks
-    with entry/SL/target levels and position sizing.
+    Scans stocks, applies 10-layer scoring (technicals + fundamentals +
+    relative strength + news sentiment), and returns top picks with
+    entry/SL/target levels and position sizing.
 
     Args:
         capital: Available trading capital in INR.
@@ -356,25 +490,48 @@ async def get_stock_picks(
         capital, max_risk_percent, user.get("sub"),
     )
 
-    # Generate demo data for a basket of stocks
-    # TODO: Replace with real data from broker APIs
-    watchlist = [
-        "RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK",
-        "SBIN", "TATAMOTORS", "TATAPOWER", "ITC", "WIPRO",
-        "BAJFINANCE", "MARUTI", "SUNPHARMA", "HINDUNILVR", "LT",
-    ]
+    # ── Build stock universe (dynamic swing candidates from TradingView) ──
+    watchlist = _swing_screener.get_swing_candidates(max_results=50)
 
+    # ── Fetch OHLCV data (yfinance preferred for bulk — Angel One too slow for 50 stocks) ──
+    # Angel One has ~2-3s per stock API latency = 100-150s for 50 stocks.
+    # yfinance handles batch much better (~1s per stock, cached).
+    # Angel One is still used for single-stock endpoints (/analyze, /predict).
     stock_data = {}
     for sym in watchlist:
         try:
-            stock_data[sym] = _generate_demo_ohlcv(sym)
+            stock_data[sym] = await _get_stock_data(sym, use_broker=False)
         except Exception as e:
-            logger.warning("Failed to generate data for %s: %s", sym, e)
+            logger.warning("Failed to fetch data for %s: %s", sym, e)
+
+    # ── Fetch Gemini news sentiment for all symbols (parallel-safe) ──
+    news_sentiments: dict[str, dict] = {}
+    if _news_service.is_enabled:
+        for sym in list(stock_data.keys())[:15]:  # Limit to 15 to avoid rate limits
+            try:
+                result = await _news_service.get_stock_news(sym, max_articles=3)
+                if result and result.sentiment:
+                    news_sentiments[sym] = {
+                        "sentiment": result.sentiment,
+                        "score": result.sentiment_score,
+                    }
+                    logger.debug(
+                        "News sentiment %s: %s (%.0f)",
+                        sym, result.sentiment, result.sentiment_score,
+                    )
+            except Exception as e:
+                logger.debug("News sentiment skip %s: %s", sym, e)
+
+    logger.info(
+        "News sentiment fetched for %d/%d stocks",
+        len(news_sentiments), len(stock_data),
+    )
 
     picks = await _picker.scan_stocks(
         stock_data=stock_data,
         capital=capital,
         max_risk_percent=max_risk_percent,
+        news_sentiments=news_sentiments,
         top_n=top_n,
     )
 
@@ -470,4 +627,107 @@ async def get_analytics(
             avg_holding_days=round(metrics.avg_holding_days, 1),
         ),
         message="Portfolio performance analytics",
+    )
+
+
+@router.get(
+    "/market/indices",
+    summary="Get Market Indices",
+    description="Get live values for Nifty, BankNifty, Sensex via yfinance.",
+)
+async def get_market_indices(
+    user: dict = Depends(get_current_user),
+) -> ApiResponse[dict]:
+    """Get market indices from yfinance.
+
+    Fetches real-time Nifty50, Sensex, and BankNifty prices.
+    Falls back to cached/default values if yfinance fails.
+
+    Args:
+        user: Authenticated user.
+
+    Returns:
+        ApiResponse with index prices and change percentages.
+    """
+    import asyncio
+
+    # Default fallback values
+    defaults = {
+        "nifty": {"price": 22450.30, "changePercent": 0.0},
+        "sensex": {"price": 73980.15, "changePercent": 0.0},
+        "bankNifty": {"price": 47850.00, "changePercent": 0.0},
+    }
+
+    try:
+        import yfinance as yf
+
+        tickers = {
+            "nifty": "^NSEI",
+            "sensex": "^BSESN",
+            "bankNifty": "^NSEBANK",
+        }
+
+        def _fetch_indices() -> dict:
+            """Fetch index data from yfinance (blocking, runs in thread)."""
+            result = {}
+            for key, yf_symbol in tickers.items():
+                try:
+                    ticker = yf.Ticker(yf_symbol)
+                    info = ticker.fast_info
+                    price = getattr(info, "last_price", None) or getattr(info, "previous_close", None)
+                    prev_close = getattr(info, "previous_close", None)
+                    if price and prev_close and prev_close > 0:
+                        change_pct = round(((price - prev_close) / prev_close) * 100, 2)
+                    else:
+                        change_pct = 0.0
+                    result[key] = {
+                        "price": round(float(price), 2) if price else defaults[key]["price"],
+                        "changePercent": change_pct,
+                    }
+                except Exception:
+                    result[key] = defaults[key]
+            return result
+
+        indices = await asyncio.to_thread(_fetch_indices)
+    except Exception as exc:
+        logger.warning("yfinance index fetch failed: %s — using defaults", exc)
+        indices = defaults
+
+    # Add market news summary from Gemini (non-blocking, failure safe)
+    market_summary = None
+    try:
+        if _news_service.is_enabled:
+            market_news = await _news_service.get_market_overview()
+            if market_news.summary:
+                market_summary = market_news.summary
+    except Exception as exc:
+        logger.debug("Market news fetch skipped: %s", exc)
+
+    indices["market_summary"] = market_summary  # type: ignore[assignment]
+
+    return ApiResponse(
+        data=indices,
+        message="Market indices (live)" if indices != defaults else "Market indices (fallback)",
+    )
+
+
+# ━━━━━━━━━━━━━━━ Swing Screener Diagnostics ━━━━━━━━━━━━━━━
+
+
+@router.get("/screener/status")
+async def get_screener_status(
+    user: dict = Depends(get_current_user),
+):
+    """
+    Get swing screener diagnostics — cache status, last scan info.
+
+    Args:
+        user: Authenticated user.
+
+    Returns:
+        ApiResponse with screener status and top candidates.
+    """
+    return ApiResponse(
+        data=_swing_screener.get_last_scan_info(),
+        message="Swing screener status",
     )

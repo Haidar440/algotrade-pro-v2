@@ -65,8 +65,8 @@ const TradeModal: React.FC<TradeModalProps> = ({ isOpen, onClose, symbol, ltp, b
               ordertype: orderType,
               producttype: "INTRADAY", 
               duration: "DAY",
-              price: orderType === 'LIMIT' ? finalPrice : 0,
-              quantity: quantity
+              price: orderType === 'LIMIT' ? finalPrice.toString() : '0',
+              quantity: quantity.toString()
           });
 
           if (orderResponse && orderResponse.status && orderResponse.orderid) {

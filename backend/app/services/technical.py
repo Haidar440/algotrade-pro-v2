@@ -238,7 +238,7 @@ class TechnicalAnalyzer:
         iv.ema_200 = self._safe_last(ema_200) if ema_200 is not None else 0.0
 
         # Bollinger Bands
-        bb_df = ta.bbands(close, length=20, std=2.0)
+        bb_df = ta.bbands(close, length=20, std=2.0)  # type: ignore[arg-type]
         if bb_df is not None and len(bb_df.columns) >= 3:
             iv.bb_lower = self._safe_last(bb_df.iloc[:, 0])
             iv.bb_middle = self._safe_last(bb_df.iloc[:, 1])

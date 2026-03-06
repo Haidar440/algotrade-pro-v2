@@ -247,6 +247,61 @@ class PaperTrader(BrokerInterface):
         """
         return self._order_book
 
+    async def search_symbols(self, query: str, exchange: Exchange = Exchange.NSE) -> list[dict]:
+        """Mock symbol search for paper trading.
+
+        Args:
+            query: Search query.
+            exchange: Exchange to search.
+
+        Returns:
+            List of mock results.
+        """
+        # Return some static mocks for testing
+        mocks = [
+            {"symbol": "RELIANCE", "token": "2885", "exchange": "NSE"},
+            {"symbol": "TCS", "token": "11536", "exchange": "NSE"},
+            {"symbol": "INFY", "token": "1594", "exchange": "NSE"},
+            {"symbol": "SBIN", "token": "3045", "exchange": "NSE"},
+            {"symbol": "HDFCBANK", "token": "1333", "exchange": "NSE"},
+        ]
+        return [m for m in mocks if query.upper() in m["symbol"]]
+
+    async def modify_order(
+        self,
+        order_request: OrderRequest,  # Using standard OrderRequest but we need ID
+        order_id: str,
+    ) -> OrderResponse:
+        """Simulate order modification.
+
+        Args:
+            order_request: New parameters.
+            order_id: ID of order to modify.
+
+        Returns:
+            OrderResponse.
+        """
+        for entry in self._order_book:
+             if entry["order_id"] == order_id:
+                 if entry["status"] != "PLACED":
+                     raise RiskCheckFailedError("Cannot modify executed or cancelled order")
+                 
+                 # Update fields
+                 entry["quantity"] = order_request.quantity
+                 entry["price"] = order_request.price
+                 entry["trigger_price"] = order_request.trigger_price
+                 
+                 logger.info("Paper order modified: %s -> Qty: %s, Price: %s", order_id, entry["quantity"], entry["price"])
+                 
+                 return OrderResponse(
+                     order_id=order_id,
+                     status="MODIFIED",
+                     message="Order modified successfully",
+                     broker=BrokerName.PAPER
+                 )
+        
+        raise BrokerConnectionError(broker="Paper", detail="Order not found")
+
     def reset(self) -> None:
         """Reset paper trader to initial state — wipes all data."""
         self._capital = self._starting_capital

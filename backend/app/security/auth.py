@@ -107,7 +107,7 @@ def decode_access_token(token: str) -> dict:
             raise UnauthorizedError("Token is missing subject claim.")
         return payload
     except JWTError as exc:
-        logger.warning("JWT decode failed: %s", exc)
+        logger.debug("JWT decode failed: %s", exc)
         raise UnauthorizedError("Invalid or expired authentication token.")
 
 

@@ -9,10 +9,9 @@ import {
   Time
 } from 'lightweight-charts';
 import axios from 'axios';
-import moment from 'moment';
 import { streamer } from '../services/streaming';
 import { Clock, AlertTriangle, Loader2, Wifi, Activity, Zap } from 'lucide-react';
-import OrderEntryPanel from './OrderEntryPanel'; // ✅ Import the new panel
+import OrderEntryPanel from './OrderEntryPanel';
 
 interface Props {
   symbol: string;
@@ -83,32 +82,30 @@ const TradingChart: React.FC<Props> = ({ symbol, token }) => {
     return () => { window.removeEventListener('resize', handleResize); chart.remove(); };
   }, []); 
 
-  // 2. Fetch History (Unchanged)
+  // 2. Fetch History — uses backend API (yfinance fallback, no Angel One required)
   useEffect(() => {
-    if (!token) return;
-    const finalToken = cleanToken(token);
+    if (!token && !symbol) return;
 
     const fetchHistory = async () => {
       setLoading(true); setError(null); lastCandleRef.current = null;
       try {
-        const savedState = localStorage.getItem('algoTradePro_brokerState');
-        const brokerState = savedState ? JSON.parse(savedState) : {};
-        if (!brokerState.angel?.jwtToken) { setError("Login Required"); return; }
+        const jwtToken = localStorage.getItem('algoTradePro_jwt');
+        if (!jwtToken) { setError("Login Required"); return; }
 
-        const toDate = moment().format('YYYY-MM-DD HH:mm');
-        const daysToSubtract = interval === 'ONE_DAY' ? 365 : 10;
-        const fromDate = moment().subtract(daysToSubtract, 'days').format('YYYY-MM-DD HH:mm');
+        const daysToFetch = interval === 'ONE_DAY' ? 365 : 10;
+        const cleanSymbol = symbol.replace('.NS', '').replace(/-EQ$|-BE$|-BL$/, '');
 
-        const response = await axios.post('http://localhost:5000/api/angel-proxy', {
-          endpoint: 'getCandleData',
-          data: { exchange: "NSE", symboltoken: finalToken, interval: interval, fromdate: fromDate, todate: toDate }
-        }, { headers: { 'Authorization': `Bearer ${brokerState.angel.jwtToken}`, 'X-PrivateKey': brokerState.angel.apiKey } });
+        const response = await axios.get('http://localhost:8000/api/broker/historical', {
+          params: { symbol: cleanSymbol, interval: interval, days: daysToFetch },
+          headers: { 'Authorization': `Bearer ${jwtToken}` }
+        });
 
-        const rawData = response.data.data;
-        if (rawData && Array.isArray(rawData)) {
+        const apiData = response.data?.data;
+        const rawData = Array.isArray(apiData) ? apiData : [];
+        if (rawData.length > 0) {
           let formattedData: CandlestickData<Time>[] = rawData.map((d: any) => ({
-            time: (new Date(d[0]).getTime() / 1000 + 19800) as Time, 
-            open: d[1], high: d[2], low: d[3], close: d[4]
+            time: (new Date(d.timestamp || d.date).getTime() / 1000 + 19800) as Time,
+            open: d.open, high: d.high, low: d.low, close: d.close
           })).sort((a, b) => (a.time as number) - (b.time as number));
 
           formattedData = formattedData.filter((item, index, self) => index === self.findIndex((t) => (t.time === item.time)));
@@ -121,6 +118,8 @@ const TradingChart: React.FC<Props> = ({ symbol, token }) => {
              setLivePrice(last.close);
              setIsConnected(true);
           }
+        } else {
+          setError("No chart data available");
         }
       } catch (err) { setError("Data Load Failed"); } finally { setLoading(false); }
     };

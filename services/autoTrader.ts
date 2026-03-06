@@ -248,8 +248,8 @@ public async runScanner() {
                 status: 'OPEN', strategy, entryDate: new Date(),
                 notes: `Paper Trade | Target: ${(price * 1.1).toFixed(1)}`
              };
-             const saved = await DB_SERVICE.saveTrade(dbTrade);
-             if (saved) dbId = saved._id;
+             const saved: any = await DB_SERVICE.saveTrade(dbTrade);
+             if (saved) dbId = saved.id || saved._id;
           } catch(e) {}
 
           const target = price + (price - sl) * this.config.targetMultiplier;
@@ -282,8 +282,8 @@ public async runScanner() {
                 status: 'OPEN', strategy, entryDate: new Date(),
                 notes: `Bot Entry | Target: ${(price * 1.1).toFixed(1)}`
             };
-            const saved = await DB_SERVICE.saveTrade(dbTrade);
-            if(saved) dbId = saved._id;
+            const saved: any = await DB_SERVICE.saveTrade(dbTrade);
+            if(saved) dbId = saved.id || saved._id;
         } catch(e) {}
 
         const slRes = await this.angel.placeOrder({

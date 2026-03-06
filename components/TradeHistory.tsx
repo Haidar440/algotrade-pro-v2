@@ -68,11 +68,11 @@ const TradeHistory: React.FC<Props> = ({ brokerState }) => {
             try {
                 const angel = new AngelOne(brokerState.angel);
                 // Get unique symbols to check prices
-                const symbols = [...new Set(openTrades.map(t => t.symbol))];
+                const symbols: string[] = Array.from(new Set<string>(openTrades.map((t: any) => t.symbol)));
                 
                 for (const sym of symbols) {
                     try {
-                        const token = await angel.searchSymbolToken(sym);
+                        const token: string = await angel.searchSymbolToken(sym);
                         if (token) {
                             const data = await angel.getLtpValue("NSE", token, sym);
                             if (data && data.price > 0) {

@@ -64,6 +64,7 @@ class BacktestEngine:
         commission: float = DEFAULT_COMMISSION,
         days: int = 365,
         params: Optional[dict] = None,
+        data_source: Optional[str] = None,
     ) -> dict[str, Any]:
         """Run a backtest for a given strategy on a symbol.
 
@@ -74,6 +75,7 @@ class BacktestEngine:
             commission: Round-trip commission (default: 0.2%).
             days: Number of historical days to test.
             params: Override default strategy parameters.
+            data_source: Data source — "angel_one", "yfinance", or None (auto).
 
         Returns:
             Dict with:
@@ -85,8 +87,15 @@ class BacktestEngine:
         # Get strategy class
         strategy_cls = get_strategy(strategy_name)
 
-        # Fetch data
-        df = await self._data_provider.get_ohlcv(symbol, days=days)
+        # Strategies with long-period indicators (EMA 200, SMA 200) need
+        # extra data for warmup. Automatically increase fetch period.
+        warmup_days = self._get_warmup_days(strategy_cls)
+        fetch_days = max(days, days + warmup_days)
+
+        # Fetch data (respects data_source preference)
+        df = await self._data_provider.get_ohlcv(
+            symbol, days=fetch_days, data_source=data_source,
+        )
 
         if df is None or len(df) < 30:
             return {
@@ -112,6 +121,7 @@ class BacktestEngine:
             cash=cash,
             commission=commission,
             exclusive_orders=True,
+            finalize_trades=True,  # Close open trades at end, include in stats
         )
 
         stats = bt.run()
@@ -130,6 +140,7 @@ class BacktestEngine:
             "from_date": str(df.index[0].date()) if hasattr(df.index[0], "date") else str(df.index[0]),
             "to_date": str(df.index[-1].date()) if hasattr(df.index[-1], "date") else str(df.index[-1]),
             "is_demo": df.attrs.get("is_demo", False),
+            "data_source": data_source or "auto",
         }
 
         logger.info(
@@ -141,9 +152,15 @@ class BacktestEngine:
             stats_dict.get("total_trades", 0),
         )
 
+        # Extract individual trades and equity curve for frontend charts
+        trades_list = self._extract_trades(stats)
+        equity_curve = self._extract_equity_curve(stats)
+
         return {
             "success": True,
             "stats": stats_dict,
+            "trades": trades_list,
+            "equity_curve": equity_curve,
             "chart_html": chart_html,
             "strategy_info": strategy_cls.get_info() if hasattr(strategy_cls, "get_info") else {},
             "data_info": data_info,
@@ -184,7 +201,12 @@ class BacktestEngine:
             Dict with best params and optimized stats.
         """
         strategy_cls = get_strategy(strategy_name)
-        df = await self._data_provider.get_ohlcv(symbol, days=days)
+
+        # Extra data for warmup
+        warmup_days = self._get_warmup_days(strategy_cls)
+        fetch_days = max(days, days + warmup_days)
+
+        df = await self._data_provider.get_ohlcv(symbol, days=fetch_days)
 
         if df is None or len(df) < 30:
             return {
@@ -198,6 +220,7 @@ class BacktestEngine:
             cash=cash,
             commission=commission,
             exclusive_orders=True,
+            finalize_trades=True,
         )
 
         # Get optimization ranges from strategy
@@ -246,6 +269,111 @@ class BacktestEngine:
                 "success": False,
                 "error": str(exc),
             }
+
+    @staticmethod
+    def _get_warmup_days(strategy_cls) -> int:
+        """Calculate extra days needed for indicator warmup.
+
+        Strategies using long-period indicators (EMA 200, SMA 200) need
+        extra historical data beyond the requested backtest period so that
+        indicators are fully initialized before trading logic starts.
+
+        Args:
+            strategy_cls: Strategy class to inspect.
+
+        Returns:
+            Number of extra calendar days to fetch for warmup.
+        """
+        warmup = 0
+
+        # Check for common long-period parameters
+        for attr in ("ema_trend", "sma_200"):
+            val = getattr(strategy_cls, attr, None)
+            if val and isinstance(val, (int, float)) and val > warmup:
+                warmup = int(val)
+
+        # Check default_params dict
+        defaults = getattr(strategy_cls, "default_params", {})
+        for key in ("ema_trend", "sma_period"):
+            val = defaults.get(key)
+            if val and isinstance(val, (int, float)) and val > warmup:
+                warmup = int(val)
+
+        # VCP strategy checks len(data) < 210
+        if hasattr(strategy_cls, "sma_200") or "vcp" in strategy_cls.__name__.lower():
+            warmup = max(warmup, 210)
+
+        # Add 20% buffer (trading days → calendar days conversion + safety margin)
+        if warmup > 0:
+            warmup = int(warmup * 1.5)
+
+        return warmup
+
+    @staticmethod
+    def _extract_trades(stats) -> list[dict]:
+        """Extract individual trade records from backtesting.py Stats.
+
+        The stats._trades DataFrame has columns:
+        EntryBar, ExitBar, EntryPrice, ExitPrice, PnL, ReturnPct, EntryTime, ExitTime, Duration, Size, Tag.
+
+        Returns:
+            List of trade dicts matching the frontend BacktestResult.trades schema.
+        """
+        try:
+            trades_df = stats._trades
+            if trades_df is None or trades_df.empty:
+                return []
+
+            trades = []
+            for _, row in trades_df.iterrows():
+                entry_time = row.get("EntryTime", "")
+                exit_time = row.get("ExitTime", "")
+                trades.append({
+                    "entry_date": str(entry_time.date()) if hasattr(entry_time, "date") else str(entry_time),
+                    "exit_date": str(exit_time.date()) if hasattr(exit_time, "date") else str(exit_time),
+                    "entry_price": round(float(row.get("EntryPrice", 0)), 2),
+                    "exit_price": round(float(row.get("ExitPrice", 0)), 2),
+                    "size": int(abs(row.get("Size", 1))),
+                    "pnl": round(float(row.get("PnL", 0)), 2),
+                    "return_pct": round(float(row.get("ReturnPct", 0) * 100), 2),
+                    "duration": str(row.get("Duration", "1 day")),
+                })
+            return trades
+        except Exception as exc:
+            logger.warning("Trade extraction failed: %s", exc)
+            return []
+
+    @staticmethod
+    def _extract_equity_curve(stats) -> list[dict]:
+        """Extract equity curve data points from backtesting.py Stats.
+
+        The stats._equity_curve DataFrame has columns: Equity, DrawdownPct, DrawdownDuration.
+        Index is DatetimeIndex.
+
+        Returns:
+            List of {date, equity} dicts for frontend charting.
+        """
+        try:
+            eq_df = stats._equity_curve
+            if eq_df is None or eq_df.empty:
+                return []
+
+            # Sample to max ~200 points for performance (frontend chart doesn't need 1000+ points)
+            if len(eq_df) > 200:
+                step = len(eq_df) // 200
+                eq_df = eq_df.iloc[::step]
+
+            curve = []
+            for idx, row in eq_df.iterrows():
+                date_str = str(idx.date()) if hasattr(idx, "date") else str(idx)
+                curve.append({
+                    "date": date_str,
+                    "equity": round(float(row.get("Equity", 0)), 2),
+                })
+            return curve
+        except Exception as exc:
+            logger.warning("Equity curve extraction failed: %s", exc)
+            return []
 
     def _generate_chart(
         self,

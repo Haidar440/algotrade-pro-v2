@@ -71,6 +71,8 @@ class Settings(BaseSettings):
 
     # ━━━━ Telegram (optional) ━━━━
     TELEGRAM_BOT_TOKEN: Optional[str] = Field(default=None, description="Telegram bot token")
+    TELEGRAM_CHAT_ID: Optional[str] = Field(default=None, description="Detailed logging chat ID")
+    TELEGRAM_WEBHOOK_URL: Optional[str] = Field(default=None, description="Public URL for webhook")
     TELEGRAM_ALLOWED_USERS: Optional[str] = Field(
         default=None,
         description="Comma-separated Telegram user IDs allowed to interact",

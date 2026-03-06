@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { BrokerState } from '../types';
 import { AngelOne } from '../services/angel';
+import { securePost } from '../services/api';
 import { X, Save, AlertTriangle, CheckCircle2, Eye, EyeOff, Loader2, RefreshCw } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -56,7 +57,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, brokerSt
     }
   };
 
-  const handleDisconnect = () => {
+  const handleDisconnect = async () => {
+      try {
+        // Disconnect from backend broker too
+        await securePost('/broker/disconnect', {});
+      } catch (e) { console.warn("Backend disconnect failed (may already be disconnected)"); }
       onSaveBrokerState({ ...brokerState, angel: undefined }); // Clear State
       setApiKey('');
       setClientCode('');

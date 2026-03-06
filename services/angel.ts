@@ -1,322 +1,305 @@
-import axios from 'axios';
-import * as OTPAuth from "otpauth"; 
-import { 
-  AngelCredentials, 
-  AngelOrderParams, 
-  AngelOrder, 
-  AngelPosition, 
-  AngelHolding, 
-  AngelFundDetails,
-  ModifyOrderParams 
-} from '../types';
+import { api, secureGet, securePost, securePut, secureDelete } from './api';
 
-// ✅ POINT TO YOUR LOCAL BACKEND
-const BACKEND_URL = 'http://localhost:5000';
-
-const MAX_REQUESTS_PER_SECOND = 3;
-const DELAY_BETWEEN_REQUESTS = 1000 / MAX_REQUESTS_PER_SECOND;
-
-export class AngelOne {
-  private apiKey: string;
-  private jwtToken: string | null = null;
-  private refreshToken: string | null = null;
-  private feedToken: string | null = null;
-  private clientCode: string | null = null;
-  
-  private onSessionUpdate?: (tokens: any) => void;
-  private requestQueue: Array<() => Promise<any>> = [];
-  private isProcessingQueue = false;
-  private tokenCache: Map<string, string> = new Map();
-
-  constructor(brokerState: any, onSessionUpdate?: (tokens: any) => void) {
-    this.apiKey = brokerState?.apiKey || "";
-    this.jwtToken = brokerState?.jwtToken || null;
-    this.refreshToken = brokerState?.refreshToken || null;
-    this.feedToken = brokerState?.feedToken || null;
-    this.clientCode = brokerState?.clientCode || null;
-    this.onSessionUpdate = onSessionUpdate;
-  }
-
-  // --- 1. PROXY HELPER ---
-  private async callProxy(endpoint: string, data: any) {
-      return axios.post(`${BACKEND_URL}/api/angel-proxy`, { endpoint, data }, {
-          headers: {
-              'X-PrivateKey': this.apiKey,
-              'Authorization': this.jwtToken ? `Bearer ${this.jwtToken}` : ''
-          }
-      });
-  }
-
-  // --- 2. QUEUE SYSTEM ---
-  private async enqueueRequest<T>(requestFn: () => Promise<T>): Promise<T> {
-    return new Promise((resolve, reject) => {
-      this.requestQueue.push(async () => {
-        try {
-          const result = await requestFn();
-          resolve(result);
-        } catch (error: any) {
-          const errorCode = error.response?.data?.errorcode;
-          if (errorCode === 'AG8002' || error.response?.status === 401 || error.response?.status === 403) {
-              console.log("⚠️ Token Expired. Refreshing...");
-              try {
-                await this.renewAccessToken();
-                const retryResult = await requestFn();
-                resolve(retryResult);
-              } catch (refreshError) { reject(refreshError); }
-          } else { reject(error); }
-        }
-      });
-      this.processQueue();
-    });
-  }
-
-  private async processQueue() {
-    if (this.isProcessingQueue || this.requestQueue.length === 0) return;
-    this.isProcessingQueue = true;
-    while (this.requestQueue.length > 0) {
-      const request = this.requestQueue.shift();
-      if (request) {
-        await request();
-        await new Promise(r => setTimeout(r, DELAY_BETWEEN_REQUESTS));
-      }
-    }
-    this.isProcessingQueue = false;
-  }
-
-  // --- 3. AUTHENTICATION ---
-  async login(clientCode: string, pin: string, totpSecret: string): Promise<any> {
-    let validTotp = totpSecret;
-    if (totpSecret.length > 10) {
-        try {
-            const totp = new OTPAuth.TOTP({ algorithm: "SHA1", digits: 6, period: 30, secret: OTPAuth.Secret.fromBase32(totpSecret) });
-            validTotp = totp.generate();
-        } catch (e) {}
-    }
-    const response = await this.callProxy('loginByPassword', { clientcode: clientCode, password: pin, totp: validTotp });
-    if (response.data.status) {
-        this.updateSession(response.data.data);
-        return response.data.data;
-    }
-    throw new Error(response.data.message || "Login Failed");
-  }
-
-  // Inside algotrade-pro1/services/angel.ts
-
-async renewAccessToken() {
-    if (!this.refreshToken) throw new Error("No Refresh Token available");
-    
-    console.log("🔄 Attempting Token Refresh...");
-    const response = await this.callProxy('generateTokens', { refreshToken: this.refreshToken });
-    
-    if (response.data.status && response.data.data) {
-        console.log("✅ Token Refreshed!");
-        this.updateSession(response.data.data);
-    } else {
-        throw new Error("Token Refresh Failed");
-    }
+// Types (Keep existing types or import them if shared)
+export interface AngelOrderParams {
+    variety: string;
+    tradingsymbol: string;
+    symboltoken: string;
+    transactiontype: 'BUY' | 'SELL';
+    exchange: string;
+    ordertype: 'MARKET' | 'LIMIT' | 'STOPLOSS_LIMIT' | 'STOPLOSS_MARKET';
+    producttype: 'INTRADAY' | 'DELIVERY' | 'CARRYFORWARD' | 'MARGIN';
+    duration: 'DAY' | 'IOC';
+    price: string;
+    quantity: string;
+    triggerprice?: string;
+    squareoff?: string;
+    stoploss?: string;
 }
-  private updateSession(data: any) {
-    this.jwtToken = data.jwtToken;
-    this.refreshToken = data.refreshToken;
-    this.feedToken = data.feedToken;
-    if (this.onSessionUpdate) this.onSessionUpdate(data);
-  }
 
-  // --- 4. TOKEN LOOKUP ---
-  async searchSymbolToken(symbol: string): Promise<string> {
-    const cleanSymbol = symbol.toUpperCase().replace('.NS', '').replace('-EQ', '');
-    if (this.tokenCache.has(cleanSymbol)) return this.tokenCache.get(cleanSymbol)!;
+export interface ModifyOrderParams {
+    orderid: string;
+    variety: string;
+    tradingsymbol: string;
+    symboltoken: string;
+    exchange: string;
+    ordertype: string;
+    producttype: string;
+    duration: string;
+    price: string;
+    quantity: string;
+    triggerprice?: string;
+}
 
-    return this.enqueueRequest(async () => {
-        try {
-            // Priority 1: Backend Search (Faster)
-            const res = await axios.get(`${BACKEND_URL}/api/search?q=${cleanSymbol}`);
-            if (res.data.length > 0) {
-                const match = res.data.find((s: any) => s.symbol === cleanSymbol) || res.data[0];
-                this.tokenCache.set(cleanSymbol, match.token);
-                return match.token;
-            }
-        } catch (e) { }
-        
-        // Priority 2: Angel API Fallback
-        try {
-            const response = await this.callProxy('searchScrip', { exchange: "NSE", searchscrip: cleanSymbol });
-            if (response.data.status && response.data.data) {
-                const match = response.data.data.find((s: any) => s.tradingsymbol === `${cleanSymbol}-EQ`) || response.data.data[0];
-                if (match) {
-                    this.tokenCache.set(cleanSymbol, match.symboltoken);
-                    return match.symboltoken;
-                }
-            }
-        } catch(e) {}
+export interface AngelOrder {
+    orderid: string;
+    tradingsymbol: string;
+    symboltoken: string;
+    transactiontype: string;
+    exchange: string;
+    ordertype: string;
+    producttype: string;
+    price: number;
+    quantity: number;
+    status: string;
+    averageprice: number;
+    ltp: number;
+}
 
-        throw new Error(`Token not found for: ${symbol}`);
-    });
-  }
+export interface AngelPosition {
+    tradingsymbol: string;
+    symboltoken: string;
+    exchange: string;
+    producttype: string;
+    netqty: string;
+    pnl: string;
+    ltp: string;
+    buyavgprice: string;
+    sellavgprice: string;
+}
+
+export interface AngelHolding {
+    tradingsymbol: string;
+    quantity: number;
+    averageprice: number;
+    ltp: number;
+    pnl: number;
+    symboltoken: string;
+    exchange: string;
+}
+
+export interface AngelFundDetails {
+    net: string;
+    availablecash: string;
+    marginused: string;
+}
 
 
- // --- 5. MARKET DATA ---
-  async getHistoricalData(symbol: string, interval: string = "ONE_DAY", days: number = 200): 
-  Promise<any[]> {
-    let token = "";
-    try { 
-        token = await this.searchSymbolToken(symbol); 
-    } catch (e) { 
-        console.warn(`⚠️ Token Lookup Failed for ${symbol}`);
-        return []; 
+// ✅ NEW Impl: Thin Client Wrapper around FastAPI
+export class AngelOne {
+    private sessionCallback?: (session: any) => void;
+    private apiKey?: string;
+
+    constructor(sessionData?: any, onSessionUpdate?: (session: any) => void) {
+        this.sessionCallback = onSessionUpdate;
+        this.apiKey = sessionData?.apiKey;
     }
-    
-    const toDate = new Date();
-    const fromDate = new Date();
-    fromDate.setDate(toDate.getDate() - days);
-    
-    const formatDate = (date: Date) => {
-        const yyyy = date.getFullYear();
-        const mm = String(date.getMonth() + 1).padStart(2, '0');
-        const dd = String(date.getDate()).padStart(2, '0');
-        const hh = String(date.getHours()).padStart(2, '0');
-        const min = String(date.getMinutes()).padStart(2, '0');
-        return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
-    };
 
-    return this.enqueueRequest(async () => {
+    // ✅ Login -> Connect Broker (sends credentials to backend)
+    async login(clientCode: string, pin: string, totpSecret: string): Promise<any> {
         try {
-            const response = await this.callProxy('getCandleData', {
-                exchange: "NSE", 
-                symboltoken: token, 
-                interval: interval, 
-                fromdate: formatDate(fromDate), 
-                todate: formatDate(toDate)
+            const res = await securePost('/broker/connect', {
+                broker: 'angel',
+                api_key: this.apiKey || undefined,
+                client_id: clientCode || undefined,
+                password: pin || undefined,
+                totp_secret: totpSecret || undefined,
             });
 
-            // ✅ LOG THE ERROR if status is false
-            if (response.data.status === false) {
-                console.error(`❌ API Error for ${symbol} (Token: ${token}):`, response.data.message);
-                return [];
+            if (readResponse(res).connected) {
+                // Return a session object with the right keys so SettingsModal can store them
+                const session = {
+                    jwtToken: 'backend_managed',
+                    refreshToken: 'backend_managed',
+                    feedToken: 'backend_managed',
+                    connected: true,
+                    broker: readResponse(res).broker,
+                };
+                if (this.sessionCallback) this.sessionCallback(session);
+                return session;
             }
+            return null; // Failed
+        } catch (error) {
+            console.error("Login failed", error);
+            throw error;
+        }
+    }
 
-            if (response.data.data) {
-                return response.data.data.map((d: any) => ({ 
-                    date: d[0], open: d[1], high: d[2], low: d[3], close: d[4], volume: d[5] 
-                }));
-            }
-            return [];
-        } catch (e: any) {
-            console.error(`❌ Request Failed for ${symbol}:`, e.message);
+    // ✅ Renew Access Token -> Not needed, backend handles it
+    async renewAccessToken(): Promise<void> {
+        console.log("Session managed by backend.");
+    }
+
+    // ✅ Search (Token Lookup)
+    async searchSymbolToken(symbol: string): Promise<string> {
+        try {
+            const res: any = await secureGet(`/broker/token?symbol=${symbol}`);
+            return res || ""; // API returns just the string token in data
+        } catch (e) {
+            return "";
+        }
+    }
+
+    // ✅ Historical Data
+    async getHistoricalData(symbol: string, interval: string = "ONE_DAY", days: number = 100): Promise<any[]> {
+        try {
+            const params = `symbol=${encodeURIComponent(symbol)}&interval=${interval}&days=${days}`;
+            const res: any = await secureGet(`/broker/historical?${params}`);
+            return Array.isArray(res) ? res.map((c: any) => ({
+                date: c.timestamp,
+                open: c.open,
+                high: c.high,
+                low: c.low,
+                close: c.close,
+                volume: c.volume
+            })) : [];
+        } catch (e) {
+            console.error("History fetch error", e);
             return [];
         }
-    });
-  }
-  // --- 6. EXECUTION & PORTFOLIO (ENHANCED) ---
+    }
 
-  // ✅ Place Order (Returns Detailed Status)
-  async placeOrder(params: AngelOrderParams): Promise<{ status: boolean; message: string; orderid?: string }> {
-      return this.enqueueRequest(async () => {
-          try {
-              const response = await this.callProxy('placeOrder', params);
-              if (response.data.status) {
-                  return { status: true, message: 'Success', orderid: response.data.data.uniqueorderid || response.data.data.orderid };
-              }
-              return { status: false, message: response.data.message || 'Order Failed' };
-          } catch (e: any) {
-              return { status: false, message: e.message || 'API Error' };
-          }
-      });
-  }
+    // ✅ Place Order
+    async placeOrder(params: AngelOrderParams): Promise<{ status: boolean; message: string; orderid?: string }> {
+        try {
+            // Map Frontend Params -> Backend OrderCreateRequest
+            const body = {
+                symbol: params.tradingsymbol, // or params.symboltoken? Backend expects symbol.
+                exchange: params.exchange,
+                side: params.transactiontype,
+                order_type: params.ordertype === 'STOPLOSS_LIMIT' ? 'SL' : params.ordertype,
+                quantity: parseInt(params.quantity),
+                price: parseFloat(params.price),
+                trigger_price: params.triggerprice ? parseFloat(params.triggerprice) : 0,
+                product: params.producttype
+            };
 
-  // ✅ Modify Order (New - For Trailing SL)
-  async modifyOrder(params: ModifyOrderParams): Promise<{ status: boolean; message: string }> {
-      return this.enqueueRequest(async () => {
-          try {
-              const response = await this.callProxy('modifyOrder', params);
-              if (response.data.status) {
-                  return { status: true, message: 'Modified' };
-              }
-              return { status: false, message: response.data.message };
-          } catch (e: any) {
-              return { status: false, message: e.message };
-          }
-      });
-  }
+            const res: any = await securePost('/broker/order', body);
+            return {
+                status: true,
+                message: res.message,
+                orderid: res.order_id
+            };
+        } catch (e: any) {
+            return { status: false, message: e.response?.data?.message || "Order failed" };
+        }
+    }
 
-  // ✅ Cancel Order (Enhanced)
-  async cancelOrder(orderId: string, variety: string = 'NORMAL'): Promise<{ status: boolean; message: string }> {
-      return this.enqueueRequest(async () => {
-          try {
-              const response = await this.callProxy('cancelOrder', { variety, orderid: orderId });
-              if (response.data.status) return { status: true, message: 'Cancelled' };
-              return { status: false, message: response.data.message };
-          } catch (e: any) {
-              return { status: false, message: e.message };
-          }
-      });
-  }
+    // ✅ Modify Order
+    async modifyOrder(params: ModifyOrderParams): Promise<{ status: boolean; message: string }> {
+        try {
+            const body = {
+                price: parseFloat(params.price),
+                quantity: parseInt(params.quantity),
+                trigger_price: params.triggerprice ? parseFloat(params.triggerprice) : 0
+            };
+            const res: any = await securePut(`/broker/order/${params.orderid}`, body);
+            return { status: true, message: res.message };
+        } catch (e: any) {
+            return { status: false, message: e.message || "Modify failed" };
+        }
+    }
 
-  // Order Book
-  async getOrderBook(): Promise<AngelOrder[]> {
-      return this.enqueueRequest(async () => {
-          const response = await this.callProxy('getOrderBook', {});
-          if (response.data.status && response.data.data) return response.data.data;
-          return [];
-      });
-  }
+    // ✅ Cancel Order
+    async cancelOrder(orderId: string, variety: string = 'NORMAL'): Promise<{ status: boolean; message: string }> {
+        try {
+            const res: any = await secureDelete(`/broker/order/${orderId}`);
+            return { status: true, message: res.message };
+        } catch (e: any) {
+            return { status: false, message: "Cancel failed" };
+        }
+    }
 
-  // Holdings
-  async getHoldings(): Promise<AngelHolding[]> {
-      return this.enqueueRequest(async () => {
-          const response = await this.callProxy('getHolding', {});
-          if (response.data.status && response.data.data) return response.data.data;
-          return [];
-      });
-  }
+    // ✅ Order Book
+    async getOrderBook(): Promise<AngelOrder[]> {
+        try {
+            const res: any = await secureGet('/broker/orders');
+            // Map backend response -> AngelOrder format if needed
+            return Array.isArray(res) ? res : [];
+        } catch (e) { return []; }
+    }
 
-  // Positions
-  async getPositions(): Promise<AngelPosition[]> {
-      return this.enqueueRequest(async () => {
-          const response = await this.callProxy('getPosition', {});
-          if (response.data.status && response.data.data) return response.data.data;
-          return [];
-      });
-  }
+    // ✅ Holdings
+    async getHoldings(): Promise<AngelHolding[]> {
+        try {
+            const res: any = await secureGet('/broker/holdings');
+            // Map backend HoldingSchema -> AngelHolding
+            return Array.isArray(res) ? res.map((h: any) => ({
+                tradingsymbol: h.symbol,
+                quantity: h.quantity,
+                averageprice: h.average_price,
+                ltp: h.ltp,
+                pnl: h.pnl,
+                symboltoken: "", // Backend might not send token, ok?
+                exchange: "NSE"
+            })) : [];
+        } catch (e) { return []; }
+    }
 
-  // Funds
-  async getFunds(): Promise<AngelFundDetails | null> {
-      return this.enqueueRequest(async () => {
-          const response = await this.callProxy('getRMS', {});
-          if (response.data.status && response.data.data) return response.data.data;
-          return null;
-      });
-  }
-  
-  // Market Indices
-  async getMarketIndices() {
-      try {
-          const nifty = await this.getLtpValue("NSE", "99926000", "Nifty 50");
-          const sensex = await this.getLtpValue("BSE", "99919000", "Sensex");
-          const bankNifty = await this.getLtpValue("NSE", "99926009", "Bank Nifty");
-          return { nifty, sensex, bankNifty };
-      } catch (e) { return null; }
-  }
+    // ✅ Positions
+    async getPositions(): Promise<AngelPosition[]> {
+        try {
+            const res: any = await secureGet('/broker/positions');
+            // Map backend PositionSchema -> AngelPosition
+            return Array.isArray(res) ? res.map((p: any) => ({
+                tradingsymbol: p.symbol,
+                symboltoken: "",
+                exchange: p.exchange,
+                producttype: p.product,
+                netqty: p.quantity.toString(),
+                pnl: p.pnl.toString(),
+                ltp: p.ltp.toString(),
+                buyavgprice: p.average_price.toString(),
+                sellavgprice: "0" // Not in schema, ignore
+            })) : [];
+        } catch (e) { return []; }
+    }
 
-  public async getLtpValue(exchange: string, token: string, symbol: string) {
-      return this.enqueueRequest(async () => {
-          const res = await this.callProxy('getLtpData', { exchange, symboltoken: token, tradingsymbol: symbol });
-          if (res.data.status && res.data.data) {
-              const ltp = res.data.data.ltp;
-              const close = res.data.data.close;
-              const percent = ((ltp - close) / close) * 100;
-              return { price: ltp, changePercent: parseFloat(percent.toFixed(2)) };
-          }
-          return { price: 0, changePercent: 0 };
-      });
-  }
+    // ✅ Funds (Risk Status/Limits from backend)
+    async getFunds(): Promise<AngelFundDetails | null> {
+        try {
+            const res: any = await secureGet('/broker/risk/status');
+            const maxValue = res.max_order_value || 100000;
+            const dailyLossUsed = maxValue - (res.daily_loss_remaining || maxValue);
+            return {
+                net: String(maxValue),
+                availablecash: String(res.daily_loss_remaining || maxValue),
+                marginused: String(dailyLossUsed)
+            };
+        } catch (e) { return null; }
+    }
 
-  // For Search Bar
-  async searchScrips(query: string) {
-      if (query.length < 2) return [];
-      try {
-          const res = await axios.get(`${BACKEND_URL}/api/search?q=${query}`);
-          return res.data;
-      } catch (e) { return []; }
-  }
+    // ✅ Market Indices (Uses Backend /api/ai/market/indices)
+    async getMarketIndices() {
+        try {
+            const res: any = await secureGet('/ai/market/indices');
+            return res;
+        } catch (e) {
+            // Fallback to reasonable defaults if backend is down
+            return {
+                nifty: { price: 0, changePercent: 0 },
+                bankNifty: { price: 0, changePercent: 0 },
+                sensex: { price: 0, changePercent: 0 }
+            };
+        }
+    }
+
+    async getLtpValue(exchange: string, token: string, symbol: string) {
+        try {
+            const res: any = await secureGet(`/broker/ltp?symbol=${encodeURIComponent(symbol)}&exchange=${exchange}`);
+            return { price: res?.ltp || res?.price || 0 };
+        } catch (e) {
+            return { price: 0 };
+        }
+    }
+
+    async searchScrip(query: string) {
+        try {
+            const res: any = await secureGet(`/broker/search?q=${query}`);
+            return Array.isArray(res) ? res.map((item: any) => ({
+                symbol: item.tradingsymbol,
+                name: item.desc || item.tradingsymbol,
+                sector: 'N/A'
+            })) : [];
+        } catch (e) { return []; }
+    }
+
+    // Helper to match old usage
+    async searchScrips(query: string) {
+        return this.searchScrip(query);
+    }
 }
+
+// Helper to handle ApiResponse wrapper unwrapping if not handled by api.ts
+// But api.ts `secureGet` returns `data.data` so `res` is already the payload.
+const readResponse = (res: any) => res;

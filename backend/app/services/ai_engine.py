@@ -11,6 +11,7 @@ AI output is sanitized before returning to clients.
 
 import json
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -22,6 +23,39 @@ from app.config import settings
 from app.constants import Signal
 
 logger = logging.getLogger(__name__)
+
+# ━━━━━━━━━━━━━━━ Gemini Circuit Breaker ━━━━━━━━━━━━━━━
+# Tracks RESOURCE_EXHAUSTED (429) failures and skips Gemini
+# for a cooldown period instead of wasting 40+ seconds on retries.
+
+_gemini_circuit_open: bool = False
+_gemini_circuit_open_until: float = 0.0
+_GEMINI_COOLDOWN_SECONDS: int = 300  # 5-minute cooldown after 429
+
+
+def _is_gemini_available() -> bool:
+    """Check if Gemini API is available (circuit breaker closed)."""
+    global _gemini_circuit_open
+    if not _gemini_circuit_open:
+        return True
+    if time.time() >= _gemini_circuit_open_until:
+        logger.info("Gemini circuit breaker reset — retrying API calls")
+        _gemini_circuit_open = False
+        return True
+    remaining = int(_gemini_circuit_open_until - time.time())
+    logger.debug("Gemini circuit breaker OPEN — %ds remaining", remaining)
+    return False
+
+
+def _trip_gemini_circuit() -> None:
+    """Trip the circuit breaker after a RESOURCE_EXHAUSTED error."""
+    global _gemini_circuit_open, _gemini_circuit_open_until
+    _gemini_circuit_open = True
+    _gemini_circuit_open_until = time.time() + _GEMINI_COOLDOWN_SECONDS
+    logger.warning(
+        "Gemini circuit breaker TRIPPED — skipping AI calls for %ds",
+        _GEMINI_COOLDOWN_SECONDS,
+    )
 
 
 # ━━━━━━━━━━━━━━━ Data Classes ━━━━━━━━━━━━━━━
@@ -112,22 +146,49 @@ class AIEngine:
     def __init__(self) -> None:
         """Initialize the AI engine with Gemini LLM.
 
-        Uses gemini-2.0-flash for fast, cost-effective analysis.
+        Uses gemini-2.5-flash for fast, cost-effective analysis.
         API key comes from settings.GEMINI_API_KEY.
+
+        Patches the underlying google.genai client to use only 1 retry
+        attempt instead of 5, preventing 40-second exponential backoff
+        storms when Gemini quota is exhausted (429 RESOURCE_EXHAUSTED).
         """
         self._llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             google_api_key=settings.GEMINI_API_KEY,
             temperature=0.3,  # Low temp for consistent analysis
             max_output_tokens=1024,
+            max_retries=1,  # LangChain-level retries
         )
+
+        # Patch google.genai SDK retry: 5 attempts → 1 (fail-fast)
+        try:
+            import tenacity
+            from google.genai._api_client import retry_args
+            from google.genai.types import HttpRetryOptions
+
+            fast_retry_opts = HttpRetryOptions(attempts=1)
+            fast_retry_kwargs = retry_args(fast_retry_opts)
+            genai_client = self._llm.client  # google.genai.Client
+            if genai_client is not None:
+                api_client = getattr(genai_client, "_api_client", None)
+                if api_client is not None:
+                    api_client._retry = tenacity.Retrying(**fast_retry_kwargs)
+                    api_client._async_retry = tenacity.AsyncRetrying(**fast_retry_kwargs)
+                    logger.info("Patched google.genai retry: attempts=1 (fast-fail)")
+        except Exception as e:
+            logger.warning("Could not patch google.genai retry settings: %s", e)
+
         self._parser = JsonOutputParser()
-        logger.info("AIEngine initialized with gemini-2.0-flash")
+        logger.info("AIEngine initialized with gemini-2.5-flash")
 
     async def analyze_stock(
         self, input_data: StockAnalysisInput
     ) -> AIAnalysisResult:
         """Analyze a stock using AI and return a structured recommendation.
+
+        Uses circuit breaker to skip Gemini when quota is exhausted,
+        falling back to technical-only analysis instantly.
 
         Args:
             input_data: Technical indicators + market context for the stock.
@@ -135,6 +196,14 @@ class AIEngine:
         Returns:
             AIAnalysisResult with signal, confidence, target, SL, and reasoning.
         """
+        # Circuit breaker: skip Gemini if recently rate-limited
+        if not _is_gemini_available():
+            logger.info(
+                "Gemini unavailable (quota exhausted) — using technical fallback for %s",
+                input_data.symbol,
+            )
+            return self._fallback_analysis(input_data)
+
         try:
             prompt = self._build_prompt(input_data)
             messages = [
@@ -143,7 +212,7 @@ class AIEngine:
             ]
 
             response = await self._llm.ainvoke(messages)
-            result = self._parse_response(response.content, input_data)
+            result = self._parse_response(str(response.content), input_data)
             logger.info(
                 "AI analysis for %s: %s (confidence: %.0f%%)",
                 input_data.symbol,
@@ -153,6 +222,10 @@ class AIEngine:
             return result
 
         except Exception as e:
+            error_str = str(e)
+            # Trip circuit breaker on quota exhaustion
+            if "RESOURCE_EXHAUSTED" in error_str or "429" in error_str:
+                _trip_gemini_circuit()
             logger.error("AI analysis failed for %s: %s", input_data.symbol, e)
             return self._fallback_analysis(input_data)
 
@@ -161,6 +234,8 @@ class AIEngine:
     ) -> dict:
         """Analyze news sentiment for a stock using Gemini.
 
+        Respects circuit breaker — returns neutral fallback if Gemini is down.
+
         Args:
             symbol: Stock symbol (e.g., "RELIANCE").
             news_text: Concatenated news articles text.
@@ -168,6 +243,15 @@ class AIEngine:
         Returns:
             Dict with sentiment (POSITIVE/NEUTRAL/NEGATIVE), score, and summary.
         """
+        # Circuit breaker check
+        if not _is_gemini_available():
+            return {
+                "sentiment": "NEUTRAL",
+                "score": 0,
+                "summary": "AI sentiment unavailable (quota exhausted)",
+                "impact": "LOW",
+            }
+
         try:
             prompt = (
                 f"Analyze the sentiment of the following news about {symbol} "
@@ -181,7 +265,7 @@ class AIEngine:
 
             messages = [HumanMessage(content=prompt)]
             response = await self._llm.ainvoke(messages)
-            parsed = self._safe_json_parse(response.content)
+            parsed = self._safe_json_parse(str(response.content))
 
             return {
                 "sentiment": parsed.get("sentiment", "NEUTRAL"),
@@ -191,6 +275,9 @@ class AIEngine:
             }
 
         except Exception as e:
+            error_str = str(e)
+            if "RESOURCE_EXHAUSTED" in error_str or "429" in error_str:
+                _trip_gemini_circuit()
             logger.error("Sentiment analysis failed for %s: %s", symbol, e)
             return {
                 "sentiment": "NEUTRAL",

@@ -93,6 +93,17 @@ class ConflictError(AlgoTradeError):
 # ━━━━━━━━━━━━━━━ Validation Errors (400/422) ━━━━━━━━━━━━━━━
 
 
+class BadRequestError(AlgoTradeError):
+    """Raised when the client sends an invalid request."""
+
+    def __init__(self, message: str = "Bad Request") -> None:
+        super().__init__(
+            message=message,
+            error_code="BAD_REQUEST",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+
 class ValidationError(AlgoTradeError):
     """Raised when input data fails validation rules."""
 

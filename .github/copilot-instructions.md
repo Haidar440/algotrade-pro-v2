@@ -83,7 +83,7 @@ algotrade-pro/
 
 - NEVER hardcode API keys, passwords, tokens, or secrets in code
 - ALL env vars read ONLY through `app/config.py` Settings class
-- ALL API routes require JWT auth (except `/api/health` and `/api/auth/login`)
+- ALL API routes require JWT auth (except `/api/health`, `/api/auth/login`, `/api/auth/register`, and `/api/telegram/webhook`)
 - Broker credentials encrypted with Fernet AES-256 via `security/vault.py`
 - Rate limiting on login: 5 requests/minute
 - Pre-commit scanner: `scripts/scan_hardcoded_secrets.py` (11 regex patterns)
@@ -104,14 +104,15 @@ algotrade-pro/
 
 ## Sprint Status
 
-| Sprint       | Scope                                                                 | Status         |
-| ------------ | --------------------------------------------------------------------- | -------------- |
-| **Sprint 1** | Foundation: FastAPI + PostgreSQL + Auth + CRUD (24 files)             | ✅ COMPLETE    |
-| **Sprint 2** | Broker Integration: Angel One + Zerodha + Paper Trader + Risk Manager | ✅ COMPLETE    |
-| **Sprint 3** | AI Engine: LangChain + Gemini + Tavily + Smart Stock Picker (7 files) | ✅ COMPLETE    |
-| **Sprint 4** | Backtesting: Engine + 6 strategies + Optimization                     | ✅ COMPLETE    |
-| **Sprint 5** | Frontend: Connect React + Telegram Bot                                | ❌ NOT STARTED |
-| **Sprint 6** | Advanced: 6 AI Agents + ML Prediction + Real-time WebSocket           | ❌ NOT STARTED |
+| Sprint         | Scope                                                                 | Status         |
+| -------------- | --------------------------------------------------------------------- | -------------- |
+| **Sprint 1**   | Foundation: FastAPI + PostgreSQL + Auth + CRUD (24 files)             | ✅ COMPLETE    |
+| **Sprint 2**   | Broker Integration: Angel One + Zerodha + Paper Trader + Risk Manager | ✅ COMPLETE    |
+| **Sprint 3**   | AI Engine: LangChain + Gemini + Tavily + Smart Stock Picker (7 files) | ✅ COMPLETE    |
+| **Sprint 4**   | Backtesting: Engine + 6 strategies + Optimization                     | ✅ COMPLETE    |
+| **Sprint 5**   | Frontend: Connect React + Telegram Bot (35 components, 14 services)   | ✅ COMPLETE    |
+| **Sprint 5.5** | DB Auth: User model + seed_admin + register endpoint                  | ✅ COMPLETE    |
+| **Sprint 6**   | Advanced: 6 AI Agents + ML Prediction + Real-time WebSocket           | ❌ NOT STARTED |
 
 ---
 
@@ -148,31 +149,70 @@ That file is the master record of every file in the project, what it does, and t
 
 ## Sprint 3 Files (AI & Analysis Engine)
 
-| File                                | Purpose                                                  |
-| ----------------------------------- | -------------------------------------------------------- |
-| `app/services/technical.py`         | TechnicalAnalyzer — 15+ indicators via pandas-ta         |
-| `app/services/ai_engine.py`         | AIEngine — LangChain + Gemini 2.0 Flash                  |
-| `app/services/tavily_search.py`     | TavilySearchService — real-time market news               |
-| `app/services/stock_picker.py`      | StockPicker — 10-layer scoring (100 pts)                  |
-| `app/services/analytics.py`         | PerformanceAnalytics — Sharpe, drawdown, win rate         |
-| `app/routers/ai.py`                 | 5 AI endpoints (analyze, predict, news, picks, analytics) |
-| `scripts/test_sprint3.py`           | 42-point Sprint 3 test suite                              |
+| File                            | Purpose                                                   |
+| ------------------------------- | --------------------------------------------------------- |
+| `app/services/technical.py`     | TechnicalAnalyzer — 15+ indicators via pandas-ta          |
+| `app/services/ai_engine.py`     | AIEngine — LangChain + Gemini 2.0 Flash                   |
+| `app/services/tavily_search.py` | TavilySearchService — real-time market news               |
+| `app/services/stock_picker.py`  | StockPicker — 10-layer scoring (100 pts)                  |
+| `app/services/analytics.py`     | PerformanceAnalytics — Sharpe, drawdown, win rate         |
+| `app/routers/ai.py`             | 5 AI endpoints (analyze, predict, news, picks, analytics) |
+| `scripts/test_sprint3.py`       | 42-point Sprint 3 test suite                              |
 
 ---
 
 ## Sprint 4 Files (Backtesting Engine)
 
-| File                                | Purpose                                          |
-| ----------------------------------- | ------------------------------------------------ |
-| `app/services/data_provider.py`     | Multi-tier data: Angel → yfinance → demo         |
-| `app/services/backtest_engine.py`   | BacktestEngine — 0.2% costs, HTML charts         |
-| `app/strategies/__init__.py`        | Lazy strategy registry                            |
-| `app/strategies/base.py`            | StrategyBase — metadata + optimization            |
-| `app/strategies/supertrend_rsi.py`  | Supertrend + RSI filter (55-60%)                  |
-| `app/strategies/vwap_orb.py`        | VWAP ORB breakout (60-70%)                        |
-| `app/strategies/ema_adx.py`         | EMA 9/21 + ADX trend filter (55-60%)              |
-| `app/strategies/rsi_macd.py`        | RSI + MACD confirmation (65-73%)                  |
-| `app/strategies/vcp_breakout.py`    | VCP Minervini method (55-65%)                     |
-| `app/strategies/volume_breakout.py` | Volume spike breakout (52-58%)                    |
-| `app/routers/backtest.py`           | 3 endpoints (strategies, run, optimize)           |
-| `scripts/verify_sprint4.py`         | 6-step backtesting verification                   |
+| File                                | Purpose                                  |
+| ----------------------------------- | ---------------------------------------- |
+| `app/services/data_provider.py`     | Multi-tier data: Angel → yfinance → demo |
+| `app/services/backtest_engine.py`   | BacktestEngine — 0.2% costs, HTML charts |
+| `app/strategies/__init__.py`        | Lazy strategy registry                   |
+| `app/strategies/base.py`            | StrategyBase — metadata + optimization   |
+| `app/strategies/supertrend_rsi.py`  | Supertrend + RSI filter (55-60%)         |
+| `app/strategies/vwap_orb.py`        | VWAP ORB breakout (60-70%)               |
+| `app/strategies/ema_adx.py`         | EMA 9/21 + ADX trend filter (55-60%)     |
+| `app/strategies/rsi_macd.py`        | RSI + MACD confirmation (65-73%)         |
+| `app/strategies/vcp_breakout.py`    | VCP Minervini method (55-65%)            |
+| `app/strategies/volume_breakout.py` | Volume spike breakout (52-58%)           |
+| `app/routers/backtest.py`           | 3 endpoints (strategies, run, optimize)  |
+| `scripts/verify_sprint4.py`         | 6-step backtesting verification          |
+
+---
+
+## Sprint 5 Files (Frontend + Telegram)
+
+| File                                 | Purpose                                              |
+| ------------------------------------ | ---------------------------------------------------- |
+| `app/services/telegram_bot.py`       | Telegram Bot — send_message, webhook, /start /status |
+| `app/routers/telegram.py`            | 3 endpoints (webhook, send, status)                  |
+| `services/api.ts`                    | Axios client → FastAPI:8000, JWT interceptor         |
+| `services/db.ts`                     | DB_SERVICE wrapping FastAPI CRUD endpoints           |
+| `services/autoTrader.ts`             | Auto-trading service via FastAPI                     |
+| `services/tvDatafeed.ts`             | TradingView data feed service                        |
+| `services/fnoUniverse.ts`            | F&O universe stock list                              |
+| `services/stockSelection.ts`         | Stock selection algorithms                           |
+| `components/AuthContext.tsx`         | React auth context, JWT in localStorage              |
+| `components/LoginScreen.tsx`         | Login UI                                             |
+| `components/RegisterScreen.tsx`      | Registration UI                                      |
+| `components/Dashboard.tsx`           | Main dashboard layout                                |
+| `components/AutoTraderDashboard.tsx` | Auto-trading controls                                |
+| `components/ExecutionDashboard.tsx`  | Execution monitoring                                 |
+| `components/TradeHistory.tsx`        | Trade history viewer                                 |
+| `components/WatchlistManager.tsx`    | Watchlist CRUD UI                                    |
+| `components/AddStockModal.tsx`       | Add stock modal dialog                               |
+| `components/OrderEntryPanel.tsx`     | Order entry form                                     |
+| `components/RealPortfolio.tsx`       | Real portfolio view                                  |
+| `components/TradeModal.tsx`          | Trade execution modal                                |
+| `components/TradingChart.tsx`        | Interactive trading chart                            |
+| `components/TradingViewTicker.tsx`   | TradingView ticker widget                            |
+| `components/TVChartContainer.tsx`    | TradingView chart container                          |
+
+---
+
+## Sprint 5.5 Files (DB Auth)
+
+| File                    | Purpose                                               |
+| ----------------------- | ----------------------------------------------------- |
+| `app/models/user.py`    | User ORM model (username, hashed_password, is_active) |
+| `scripts/seed_admin.py` | Seeds admin user (admin / admin1234)                  |

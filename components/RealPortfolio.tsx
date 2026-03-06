@@ -27,6 +27,7 @@ const RealPortfolio: React.FC<RealPortfolioProps> = ({ brokerState }) => {
   
   // UI State
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: SortDirection } | null>(null);
@@ -39,6 +40,7 @@ const RealPortfolio: React.FC<RealPortfolioProps> = ({ brokerState }) => {
   const fetchData = async () => {
     if (!brokerState.angel) return;
     setLoading(true);
+    setFetchError(null);
     
     try {
       const angel = new AngelOne(brokerState.angel);
@@ -69,14 +71,16 @@ const RealPortfolio: React.FC<RealPortfolioProps> = ({ brokerState }) => {
       setCurrentValue(curr);
       setTotalPnL(curr - invested);
 
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to fetch broker data", err);
+      setFetchError(err?.message || "Failed to fetch portfolio data. Make sure Angel One is connected.");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchData(); }, [brokerState.angel]);
+  // Fetch data on every mount (component remounts when navigating back)
+  useEffect(() => { fetchData(); }, []);
 
   // --- SORTING HANDLER ---
   const handleSort = (key: string) => {
@@ -203,6 +207,20 @@ const RealPortfolio: React.FC<RealPortfolioProps> = ({ brokerState }) => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       
+      {/* Error Banner */}
+      {fetchError && (
+        <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-center gap-3 text-rose-200">
+          <Activity className="w-5 h-5 shrink-0" />
+          <div className="flex-1">
+            <p className="font-bold text-sm">Portfolio fetch failed</p>
+            <p className="text-xs text-rose-300/70 mt-0.5">{fetchError}</p>
+          </div>
+          <button onClick={fetchData} className="px-3 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-xs font-bold rounded transition-colors">
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* 1. SUMMARY HEADER */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-900 rounded-xl p-6 border border-slate-800 shadow-xl relative overflow-hidden">
          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl -mr-16 -mt-16"></div>

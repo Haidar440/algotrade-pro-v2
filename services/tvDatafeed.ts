@@ -105,12 +105,9 @@ export default {
         try {
             console.log(`📡 TV Fetch: ${symbolInfo.name} (${resolution})`);
             const history = await angel.getHistoricalData(
-                symbolInfo.token, // Use token we saved in resolveSymbol
+                symbolInfo.token,
                 angelInterval,
-                // Passing raw dates isn't enough for Angel sometimes, but let's try standard range
-                100, // Limit doesn't matter much if using date range in backend proxy
-                formatDate(from),
-                formatDate(to)
+                100
             );
 
             if (!history || history.length === 0) {

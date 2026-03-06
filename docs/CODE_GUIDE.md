@@ -1,9 +1,9 @@
 # AlgoTrade Pro — Developer Code Guide
 
-> **Last Updated:** 2026-02-15  
+> **Last Updated:** 2026-03-06  
 > **For:** Developers who want to read, understand, and modify this codebase  
-> **Stack:** Python 3.11+ · FastAPI · PostgreSQL · LangChain + Gemini · backtesting.py  
-> **Status:** Sprints 1-4 complete (out of 6)
+> **Stack:** Python 3.11+ · FastAPI · PostgreSQL · Gemini 2.5 Flash + Google Search · TradingView Screener · backtesting.py  
+> **Status:** Sprints 1-5.5 complete + Post-Sprint AI Overhaul (out of 6)
 
 ---
 
@@ -37,7 +37,7 @@ AlgoTrade Pro is an **AI-powered algorithmic trading platform** for Indian stock
 │                                                                  │
 │  ┌────────────────────── ROUTERS ─────────────────────────┐     │
 │  │ /api/health  │ /api/auth  │ /api/trades  │ /api/broker │     │
-│  │ /api/watchlists  │ /api/ai  │ /api/backtest            │     │
+│  │ /api/watchlists │ /api/ai │ /api/backtest │ /api/telegram            │     │
 │  └───────────┬───────────────────────────────────────────┘      │
 │              │ Depends(get_current_user) ← JWT auth             │
 │              ▼                                                   │
@@ -46,9 +46,10 @@ AlgoTrade Pro is an **AI-powered algorithmic trading platform** for Indian stock
 │  │                     PaperTrader                         │     │
 │  │ RiskManager       ← 6 pre-trade checks                 │     │
 │  │ TechnicalAnalyzer ← 15+ indicators (pandas-ta)         │     │
-│  │ AIEngine          ← LangChain + Gemini 2.0 Flash       │     │
-│  │ TavilySearch      ← Real-time news                     │     │
-│  │ StockPicker        ← 10-layer scoring (100 pts)        │     │
+│  │ AIEngine          ← LangChain + Gemini 2.5 Flash       │     │
+│  │ GeminiNewsService ← Gemini + Google Search grounding                     │     │
+│  │ SwingScreener      ← TradingView API (dynamic NSE scan) │     │
+│  │ StockPicker        ← 10 real yfinance scoring dims        │     │
 │  │ PerformanceAnalytics ← Sharpe, drawdown, streaks       │     │
 │  │ DataProvider       ← Angel → yfinance → demo data      │     │
 │  │ BacktestEngine     ← backtesting.py + 6 strategies     │     │
@@ -56,7 +57,7 @@ AlgoTrade Pro is an **AI-powered algorithmic trading platform** for Indian stock
 │              ▼                                                   │
 │  ┌────────────── DATA LAYER ──────────────┐                     │
 │  │ PostgreSQL (async) ← SQLAlchemy 2.0    │                     │
-│  │ 5 ORM models: Trade, Watchlist,        │                     │
+│  │ 6 ORM models: Trade, Watchlist, User,        │                     │
 │  │   Instrument, AuditLog, BaseModel      │                     │
 │  │ Vault: Fernet AES-256 encryption       │                     │
 │  └────────────────────────────────────────┘                     │
@@ -71,7 +72,7 @@ AlgoTrade Pro is an **AI-powered algorithmic trading platform** for Indian stock
 
 | File | What It Does | Key Exports |
 |------|-------------|-------------|
-| `main.py` | **Entry point.** Creates FastAPI app, wires 7 routers, sets up lifespan (startup/shutdown) | `app`, `lifespan()` |
+| `main.py` | **Entry point.** Creates FastAPI app, wires 8 routers, sets up lifespan (startup/shutdown) | `app`, `lifespan()` |
 | `config.py` | **Only file that reads `.env`.** Pydantic Settings validates all env vars at startup. Crashes if invalid | `settings` (singleton) |
 | `constants.py` | **15 Enums.** Zero magic strings anywhere. BrokerName, Exchange, OrderSide, OrderType, Signal, etc. | All enum classes |
 | `exceptions.py` | **11 custom exceptions** with HTTP codes. `NotFoundError(404)`, `UnauthorizedError(401)`, etc. | Exception classes |
@@ -167,12 +168,12 @@ All ORM models use SQLAlchemy 2.0's `Mapped[]` + `mapped_column()` syntax.
 | POST | `/api/broker/risk/kill` | ✅ | 🚨 Emergency kill switch ON |
 | DELETE | `/api/broker/risk/kill` | ✅ | Kill switch OFF |
 
-#### `ai.py` — 5 endpoints
+#### `ai.py` — 6 endpoints + screener/status
 | Method | URL | Auth | What It Does |
 |--------|-----|------|-------------|
 | GET | `/api/ai/analyze/{symbol}` | ✅ | Technical analysis (15+ indicators) |
 | GET | `/api/ai/predict/{symbol}` | ✅ | AI prediction (Gemini BUY/SELL/HOLD) |
-| GET | `/api/ai/news/{symbol}` | ✅ | Real-time news search (Tavily) |
+| GET | `/api/ai/news/{symbol}` | ✅ | News intelligence (Gemini + Google Search grounding) |
 | GET | `/api/ai/picks` | ✅ | Smart stock scanner (top picks) |
 | GET | `/api/ai/analytics` | ✅ | Performance metrics (Sharpe, drawdown) |
 
@@ -244,20 +245,22 @@ Technical Analysis Pipeline:
 AI Prediction Pipeline:
     TechnicalAnalysis result
         → AIEngine._build_prompt()           ← Structures data for AI
-        → Gemini 2.0 Flash (via LangChain)   ← AI reasoning
+        → Gemini 2.5 Flash (via LangChain)   ← AI reasoning
         → AIEngine._parse_response()          ← JSON extraction
         → AIAnalysisResult { signal, confidence, target, SL, reasoning }
         → Fallback: _fallback_analysis()      ← Pure technical if AI fails
 
 Stock Scanning Pipeline:
-    [RELIANCE, TCS, INFY, ...]
+    SwingScreener.scan()              ← TradingView API (dynamic NSE)
+        → 137+ matching stocks → top 50 by volume
+    [Dynamic stock list]
         → TechnicalAnalyzer.analyze() each
         → StockPicker.score_stock()           ← 10-layer scoring (100 pts)
         │    ├── Technical (40 pts): RSI, MACD, ADX, EMA alignment
         │    ├── Volume (20 pts): volume surge, spike detection
         │    ├── Strength (15 pts): above 200 SMA, near 52w high
         │    ├── Fundamentals (15 pts): sector strength, market cap
-        │    └── News (10 pts): Tavily sentiment score
+        │    └── News (10 pts): Gemini + Google Search sentiment
         → StockPick { symbol, score, rating, entry, SL, target, shares }
         → Rating: GOLDEN (80+) / STRONG (65+) / MODERATE (50+) / SKIP (<50)
 ```
@@ -266,7 +269,9 @@ Stock Scanning Pipeline:
 |------|-------|-------------|
 | `technical.py` | `TechnicalAnalyzer` | `analyze(df)` → `TechnicalAnalysisResult` with 15+ indicators |
 | `ai_engine.py` | `AIEngine` | `analyze_stock(input)` → `AIAnalysisResult`, `get_sentiment_analysis(symbol, news)` |
-| `tavily_search.py` | `TavilySearchService` | `search_stock_news(symbol)`, `search_sector_news(sector)`, `search_market_overview()` |
+| `gemini_news.py` | `GeminiNewsService` | Gemini 2.5 Flash + Google Search grounding |
+| `tavily_search.py` | `TavilySearchService` | **LEGACY** — replaced by `gemini_news.py`. Kept for fallback only |
+| `swing_screener.py` | `SwingScreener` | `scan()` → dynamic NSE stock list via TradingView Screener API |
 | `stock_picker.py` | `StockPicker` | `scan_stocks(stock_data, capital)` → `list[StockPick]`, `score_stock(analysis)` → `StockScore` |
 | `analytics.py` | `PerformanceAnalytics` | `calculate(trades)` → Sharpe ratio, max drawdown, win rate, profit factor, expectancy, streaks |
 
@@ -395,7 +400,8 @@ settings.JWT_SECRET_KEY    → auth.py → create_access_token()
 settings.DATABASE_URL      → database.py → SQLAlchemy engine
 settings.GEMINI_API_KEY    → ai_engine.py → ChatGoogleGenerativeAI()
 settings.ANGEL_API_KEY     → config check → angel_broker.py
-settings.TAVILY_API_KEY    → tavily_search.py (optional, graceful fallback)
+settings.GEMINI_API_KEY    → gemini_news.py (Google Search grounding)
+settings.TELEGRAM_BOT_TOKEN → telegram_bot.py (optional, graceful fallback)
 settings.MAX_ORDER_VALUE   → risk_manager.py → _check_order_value()
 ```
 

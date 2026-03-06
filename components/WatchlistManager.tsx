@@ -1,24 +1,30 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { DB_SERVICE } from '../services/db';
-import { BrokerState, SignalFeedItem } from '../types';
+import { BrokerState } from '../types';
 import Sparkline from './Sparkline';
 import AddStockModal from './AddStockModal';
-import axios from 'axios';
-import { io } from 'socket.io-client';
 import { 
   Search, Plus, Trash2, ChevronRight, Loader2, Edit3, Check, RotateCcw, X, 
-  BarChart2 // ✅ Imported Chart Icon
+  BarChart2
 } from 'lucide-react';
-
-const socket = io('http://localhost:5000');
 
 interface Props {
   onAnalyze: (symbol: string) => void;
   brokerState: BrokerState;
 }
 
-interface WatchlistItem extends SignalFeedItem {
+/**
+ * Watchlist item stored in DB. Does NOT extend SignalFeedItem —
+ * watchlist items are simple stock references with price/change info.
+ */
+interface WatchlistItem {
+  id: string;
+  symbol: string;
+  name: string;
   token: string;
+  price: number;
+  changePercent: number;
+  strategy?: string;
   lastChange?: 'flash-up' | 'flash-down' | '';
 }
 
@@ -34,85 +40,104 @@ const WatchlistManager: React.FC<Props> = ({ onAnalyze, brokerState }) => {
 
   const loadListNames = async () => {
     try {
-      const names = await DB_SERVICE.getWatchlistNames();
-      if (names.length > 0) {
+      const names: any = await DB_SERVICE.getWatchlistNames();
+      if (names && names.length > 0) {
         setListNames(names);
-        if (!activeList) setActiveList(names[0]);
+        if (!names.includes(activeList)) setActiveList(names[0]);
+      } else {
+        // No watchlists exist — create a Default one
+        await DB_SERVICE.saveWatchlist('Default', []);
+        setListNames(['Default']);
+        setActiveList('Default');
       }
     } catch (e) { console.error("Load names error", e); }
   };
 
   const loadItems = async () => {
+    if (!activeList) { setLoading(false); return; }
     setLoading(true);
     try {
-      const data = await DB_SERVICE.getWatchlist(activeList);
+      const data: any = await DB_SERVICE.getWatchlist(activeList);
       const listItems = data?.items || [];
-      const updatedItems = await Promise.all(listItems.map(async (item: any) => {
-        try {
-          if (!item.token) return item;
-          const response = await axios.post('http://localhost:5000/api/angel-proxy', {
-             endpoint: 'getLtpData',
-             data: { exchange: "NSE", symboltoken: item.token, tradingsymbol: item.symbol }
-          });
-          const ltp = response.data.data?.ltp || item.price;
-          const close = response.data.data?.close || 0;
+      // Normalize items with safe defaults — DB items may lack some fields
+      const normalized = listItems.map((item: any) => ({
+        id: item.id || `s-${item.token || item.symbol}-${Date.now()}`,
+        symbol: item.symbol || '',
+        name: item.name || item.symbol || '',
+        token: item.token || '',
+        price: item.price ?? 0,
+        changePercent: item.changePercent ?? 0,
+        strategy: item.strategy || 'Equity',
+        lastChange: '' as const,
+      }));
+      setItems(normalized);
+
+      // Fetch live prices in background (non-blocking)
+      if (normalized.length > 0) {
+        fetchLivePrices(normalized);
+      }
+    } catch (e) {
+      console.error("Load items error", e);
+      setItems([]);
+    } finally { setLoading(false); }
+  };
+
+  const fetchLivePrices = async (currentItems: WatchlistItem[]) => {
+    try {
+      const symbols = currentItems.map(i => i.symbol);
+      const quotes: any = await DB_SERVICE.getQuotes(symbols);
+      if (!quotes || typeof quotes !== 'object') return;
+
+      setItems(prev => {
+        const updated = prev.map(item => {
+          const q = quotes[item.symbol];
+          if (!q || !q.price) return item;
+          const oldPrice = item.price || 0;
+          const newPrice = q.price;
           return {
             ...item,
-            price: ltp,
-            changePercent: close > 0 ? ((ltp - close) / close * 100) : item.changePercent
+            price: newPrice,
+            changePercent: q.changePercent ?? item.changePercent,
+            lastChange: newPrice > oldPrice ? 'flash-up' as const : newPrice < oldPrice ? 'flash-down' as const : '' as const,
           };
-        } catch (e) { return item; }
-      }));
-      setItems(updatedItems);
-      updatedItems.forEach((item: any) => {
-        if (item.token) socket.emit('subscribe', item.token);
+        });
+
+        // Persist updated prices to DB (fire-and-forget)
+        DB_SERVICE.saveWatchlist(activeList, updated.map(({ lastChange, ...rest }) => rest));
+
+        return updated;
       });
-    } catch (e) { console.error("Load items error", e); } finally { setLoading(false); }
+
+      // Clear flash after animation
+      setTimeout(() => {
+        setItems(prev => prev.map(item => ({ ...item, lastChange: '' as const })));
+      }, 1500);
+    } catch (e) {
+      console.error("Price fetch error", e);
+    }
   };
 
   useEffect(() => { loadListNames(); }, []);
   useEffect(() => { if (activeList) loadItems(); }, [activeList]);
 
-  useEffect(() => {
-    const onPriceUpdate = (data: any) => {
-      setItems(prevItems => prevItems.map(item => {
-        if (String(item.token) === String(data.token)) {
-          const newPrice = parseFloat(data.lp) || item.price;
-          const flash = newPrice > item.price ? 'flash-up' : newPrice < item.price ? 'flash-down' : '';
-          return { ...item, price: newPrice, changePercent: parseFloat(data.pc) || item.changePercent, lastChange: flash };
-        }
-        return item;
-      }));
-    };
-    socket.on('price-update', onPriceUpdate);
-    return () => { socket.off('price-update', onPriceUpdate); };
-  }, []);
-
   const handleAddStock = async (stock: any) => {
     if (items.some(i => String(i.token) === String(stock.token))) {
-      alert(`⚠️ ${stock.symbol} is already in this watchlist!`);
+      alert(`${stock.symbol.replace(/-EQ$/, '')} is already in this watchlist!`);
       setIsAddModalOpen(false);
       return;
     }
     try {
-      const res = await axios.post('http://localhost:5000/api/angel-proxy', {
-        endpoint: 'getLtpData',
-        data: { exchange: "NSE", symboltoken: stock.token, tradingsymbol: stock.symbol }
-      });
-      const ltp = res.data.data?.ltp || 0;
-      const close = res.data.data?.close || 0;
-      const stockData = { ...stock, price: ltp, changePercent: close > 0 ? ((ltp - close) / close * 100) : 0, id: `s-${stock.token}-${Date.now()}` };
+      const stockData = { ...stock, price: stock.price || 0, changePercent: stock.changePercent || 0, id: `s-${stock.token || stock.symbol}-${Date.now()}` };
       const updated = [...items, stockData];
       await DB_SERVICE.saveWatchlist(activeList, updated);
       setItems(updated);
-      if (stockData.token) socket.emit('subscribe', stockData.token);
     } catch (e) { console.error("Add stock error", e); } finally { setIsAddModalOpen(false); }
   };
 
   const handleDone = async () => {
     if (pendingDeletions.length === 0) { setIsEditMode(false); return; }
     try {
-        await Promise.all(pendingDeletions.map(name => axios.delete(`http://localhost:5000/api/watchlists/${encodeURIComponent(name)}`)));
+        await Promise.all(pendingDeletions.map(name => DB_SERVICE.deleteWatchlist(name)));
         const remaining = listNames.filter(n => !pendingDeletions.includes(n));
         setListNames(remaining);
         if (pendingDeletions.includes(activeList)) setActiveList(remaining[0] || 'Default');
@@ -127,8 +152,15 @@ const WatchlistManager: React.FC<Props> = ({ onAnalyze, brokerState }) => {
   const handleDeleteItem = async (id: string) => { const newItems = items.filter(i => i.id !== id); setItems(newItems); await DB_SERVICE.saveWatchlist(activeList, newItems); };
 
   const filteredItems = useMemo(() => {
-    return items.filter(item => item.symbol.toLowerCase().includes(searchTerm.toLowerCase()));
+    const term = searchTerm.toLowerCase();
+    return items.filter(item => 
+      item.symbol.toLowerCase().includes(term) || 
+      (item.name || '').toLowerCase().includes(term)
+    );
   }, [items, searchTerm]);
+
+  // Helper to show clean symbol name (strip -EQ suffix)
+  const cleanSymbol = (symbol: string) => symbol.replace(/-EQ$/, '').replace(/-BE$/, '');
 
   // ✅ New Handler to Open Chart in New Tab
   const openChartInNewTab = (symbol: string, token: string) => {
@@ -179,8 +211,8 @@ const WatchlistManager: React.FC<Props> = ({ onAnalyze, brokerState }) => {
               <tr key={item.id} className="hover:bg-blue-400/[0.02] transition-colors group">
                 <td className="p-4">
                   <div className="flex items-center gap-3">
-                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs ${item.changePercent >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>{item.symbol.substring(0, 2)}</div>
-                     <div><div className="font-bold text-white text-sm">{item.symbol}</div><div className="text-[10px] text-slate-500 font-bold uppercase">{item.strategy || "Equity"}</div></div>
+                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs ${item.changePercent >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>{cleanSymbol(item.symbol).substring(0, 2)}</div>
+                     <div><div className="font-bold text-white text-sm">{cleanSymbol(item.symbol)}</div><div className="text-[10px] text-slate-500 font-bold uppercase">{item.name || "Equity"}</div></div>
                   </div>
                 </td>
                 <td className="p-4 hidden md:table-cell"><div className="h-6 w-20 mx-auto opacity-70 group-hover:opacity-100 transition-opacity"><Sparkline isPositive={item.changePercent >= 0} color={item.changePercent >= 0 ? '#10b981' : '#f43f5e'} id={item.id} /></div></td>

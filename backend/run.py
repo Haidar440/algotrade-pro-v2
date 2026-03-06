@@ -16,6 +16,8 @@ def main() -> None:
         port=8000,
         reload=True,
         reload_dirs=[os.path.join(base_dir, "app")],
+        reload_includes=["*.py"],
+        reload_excludes=["scripts/*", "tests/*", "*.pyc"],
         log_level="info",
     )
 

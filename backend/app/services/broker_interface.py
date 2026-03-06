@@ -182,6 +182,21 @@ class BrokerInterface(ABC):
         ...
 
     @abstractmethod
+    async def modify_order(self, order_id: str, price: float, trigger_price: float = 0.0, quantity: int = 0) -> OrderResponse:
+        """Modify an open order.
+
+        Args:
+            order_id: Order ID to modify.
+            price: New price.
+            trigger_price: New trigger price.
+            quantity: New quantity (0 = unchanged).
+
+        Returns:
+            OrderResponse with status.
+        """
+        ...
+
+    @abstractmethod
     async def cancel_order(self, order_id: str) -> OrderResponse:
         """Cancel a pending order.
 
@@ -253,5 +268,18 @@ class BrokerInterface(ABC):
 
         Returns:
             List of order dictionaries.
+        """
+        ...
+
+    @abstractmethod
+    async def search_symbols(self, query: str, exchange: Exchange = Exchange.NSE) -> list[dict]:
+        """Search for symbols/scrip tokens.
+
+        Args:
+            query: Search string (e.g. "RELIANCE").
+            exchange: Exchange segment.
+
+        Returns:
+            List of found symbols with tokens.
         """
         ...

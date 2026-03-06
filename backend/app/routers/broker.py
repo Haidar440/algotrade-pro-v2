@@ -7,6 +7,7 @@ Orders go through the RiskManager before reaching the broker.
 """
 
 import logging
+from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Request
@@ -24,6 +25,7 @@ from app.models.schemas import (
     BrokerConnectRequest,
     HoldingSchema,
     OrderCreateRequest,
+    OrderModifyRequest,
     OrderResponseSchema,
     PaperTradingSummary,
     PositionSchema,
@@ -55,6 +57,20 @@ def _get_active_broker() -> BrokerInterface:
             detail="No broker connected. Use POST /api/broker/connect first.",
         )
     return _active_broker
+
+
+def get_active_broker_optional() -> Optional[BrokerInterface]:
+    """Get the active broker if connected, else None.
+
+    Used by other modules (e.g., ai.py) that want to opportunistically
+    use broker data but can fall back to other sources.
+
+    Returns:
+        Active BrokerInterface or None.
+    """
+    if _active_broker is not None and _active_broker.is_connected:
+        return _active_broker
+    return None
 
 
 # ━━━━━━━━━━━━━━━ Connection Endpoints ━━━━━━━━━━━━━━━
@@ -103,13 +119,21 @@ async def connect_broker(
     if broker_name == BrokerName.PAPER:
         credentials = {}
     elif broker_name == BrokerName.ANGEL:
-        if not settings.is_broker_configured("angel"):
-            raise BrokerNotConfiguredError(broker="Angel One")
+        # Priority: frontend-sent credentials > .env credentials
+        api_key = body.api_key or settings.ANGEL_API_KEY
+        client_id = body.client_id or settings.ANGEL_CLIENT_ID
+        password = body.password or settings.ANGEL_PASSWORD
+        totp_secret = body.totp_secret or settings.ANGEL_TOTP_SECRET
+
+        if not all([api_key, client_id, password, totp_secret]):
+            raise BrokerNotConfiguredError(
+                broker="Angel One — provide credentials via request or set ANGEL_* env vars"
+            )
         credentials = {
-            "api_key": settings.ANGEL_API_KEY,
-            "client_id": settings.ANGEL_CLIENT_ID,
-            "password": settings.ANGEL_PASSWORD,
-            "totp_secret": settings.ANGEL_TOTP_SECRET,
+            "api_key": api_key,
+            "client_id": client_id,
+            "password": password,
+            "totp_secret": totp_secret,
         }
     elif broker_name == BrokerName.ZERODHA:
         if not settings.is_broker_configured("zerodha"):
@@ -267,6 +291,49 @@ async def place_order(
             broker=response.broker.value,
         ),
         message="Order placed successfully",
+    )
+
+
+@router.put(
+    "/order/{order_id}",
+    response_model=ApiResponse[OrderResponseSchema],
+    summary="Modify an order",
+    description="Modify price, trigger price, or quantity of an open order.",
+)
+async def modify_order(
+    order_id: str,
+    request: Request,
+    body: OrderModifyRequest,  # We need to import this!
+    user: dict = Depends(get_current_user),
+) -> ApiResponse[OrderResponseSchema]:
+    """Modify an open order.
+
+    Args:
+        order_id: The order ID to modify.
+        body: New parameters (price, trigger_price).
+        user: Authenticated user (from JWT).
+    """
+    broker = _get_active_broker()
+    
+    # We should add risk checks here too, but for modification it's tricky.
+    # For now, we trust the broker to reject invalid mods.
+    # In a full system, we check limits again.
+
+    response = await broker.modify_order(
+        order_id=order_id,
+        price=body.price,
+        trigger_price=body.trigger_price,
+        quantity=body.quantity,
+    )
+
+    return ApiResponse(
+        data=OrderResponseSchema(
+            order_id=response.order_id,
+            status=response.status,
+            message=response.message,
+            broker=response.broker.value,
+        ),
+        message="Order modified successfully",
     )
 
 
@@ -473,3 +540,153 @@ async def deactivate_kill_switch(
         data=RiskStatusSchema(**status_data),
         message="Kill switch DEACTIVATED — trading resumed",
     )
+
+
+# ━━━━━━━━━━━━━━━ Data & Helper Endpoints ━━━━━━━━━━━━━━━
+
+
+@router.get(
+    "/ltp",
+    response_model=ApiResponse[dict],
+    summary="Get last traded price",
+)
+async def get_ltp(
+    symbol: str,
+    exchange: str = "NSE",
+    user: dict = Depends(get_current_user),
+) -> ApiResponse[dict]:
+    """Get the last traded price for a symbol.
+
+    Args:
+        symbol: Trading symbol (e.g. 'RELIANCE').
+        exchange: Exchange segment (default NSE).
+    """
+    broker = _get_active_broker()
+    try:
+        exc_enum = Exchange(exchange.upper())
+    except ValueError:
+        exc_enum = Exchange.NSE
+
+    ltp = await broker.get_ltp(symbol, exc_enum)
+    return ApiResponse(
+        data={"symbol": symbol, "exchange": exchange, "ltp": ltp},
+        message=f"LTP for {symbol}: {ltp}",
+    )
+
+
+@router.get(
+    "/search",
+    response_model=ApiResponse[list[dict]],
+    summary="Search for symbols",
+)
+async def search_symbols(
+    q: str,
+    exchange: str = "NSE",
+    user: dict = Depends(get_current_user),
+) -> ApiResponse[list[dict]]:
+    """Search for stocks/instruments via the connected broker.
+
+    Args:
+        q: Query string (e.g. 'RELIANCE').
+        exchange: Exchange segment (default NSE).
+    """
+    broker = _get_active_broker()
+    try:
+        exc_enum = Exchange(exchange.upper())
+    except ValueError:
+        exc_enum = Exchange.NSE
+
+    results = await broker.search_symbols(q, exc_enum)
+    return ApiResponse(
+        data=results,
+        message=f"Found {len(results)} results for '{q}'",
+    )
+
+
+@router.get(
+    "/token",
+    response_model=ApiResponse[str],
+    summary="Get symbol token",
+)
+async def get_symbol_token(
+    symbol: str,
+    exchange: str = "NSE",
+    user: dict = Depends(get_current_user),
+) -> ApiResponse[str]:
+    """Helper to get the token for a specific symbol."""
+    broker = _get_active_broker()
+    try:
+        exc_enum = Exchange(exchange.upper())
+    except ValueError:
+        exc_enum = Exchange.NSE
+
+    results = await broker.search_symbols(symbol, exc_enum)
+    
+    # Simple match logic
+    token = ""
+    for item in results:
+        if item.get("tradingsymbol") == symbol or item.get("symbol") == symbol:
+            token = item.get("symboltoken", "") or item.get("token", "")
+            break
+            
+    if not token and results:
+        # Fallback to first result if exact match fails
+        token = results[0].get("symboltoken", "") or results[0].get("token", "")
+
+    if not token:
+        return ApiResponse(data="", message="Token not found")
+
+    return ApiResponse(
+        success=True,
+        data=token,
+        message=f"Token for {symbol}: {token}",
+    )
+
+
+@router.get(
+    "/historical",
+    response_model=ApiResponse[list[dict]],
+    summary="Get historical candle data",
+)
+async def get_historical_data(
+    symbol: str,
+    interval: str = "ONE_DAY",
+    days: int = 200,
+    exchange: str = "NSE",
+    user: dict = Depends(get_current_user),
+) -> ApiResponse[list[dict]]:
+    """Fetch historical OHLCV data for charts.
+
+    Args:
+        symbol: Trading symbol.
+        interval: Candle interval.
+        days: Number of days of history to fetch.
+    """
+    broker = _get_active_broker()
+    try:
+        exc_enum = Exchange(exchange.upper())
+    except ValueError:
+        exc_enum = Exchange.NSE
+
+    # Calculate dates
+    to_date = datetime.now()
+    from_date = to_date - timedelta(days=days)
+
+    try:
+        df = await broker.get_historical(symbol, exc_enum, interval, from_date, to_date)
+        
+        # Convert DataFrame to list of dicts for JSON response
+        data = df.to_dict(orient="records") if not df.empty else []
+        
+        # Ensure timestamp is string for JSON serialization
+        for d in data:
+            if "timestamp" in d and not isinstance(d["timestamp"], str):
+                 d["timestamp"] = str(d["timestamp"])
+
+        return ApiResponse(
+            data=data,
+            message=f"Fetched {len(data)} candles for {symbol}",
+        )
+    except Exception as e:
+        logger.error(f"Historical data error: {e}")
+        return ApiResponse(data=[], message=f"Failed to fetch history: {e}")

@@ -400,6 +400,57 @@ class ZerodhaBroker(BrokerInterface):
                 detail=f"Order book fetch failed: {exc}",
             )
 
+    async def search_symbols(self, query: str, exchange: Exchange = Exchange.NSE) -> list[dict]:
+        """Search symbols (Not fully supported by Kite Connect API).
+
+        Returns:
+            Empty list (Search requires downloading master CSV).
+        """
+        logger.warning("Zerodha does not support symbol search via API. Returning empty.")
+        return []
+
+    async def modify_order(
+        self,
+        order_request: OrderRequest,
+        order_id: str,
+    ) -> OrderResponse:
+        """Modify an open order on Zerodha.
+
+        Args:
+            order_request: New parameters.
+            order_id: ID of order to modify.
+
+        Returns:
+            OrderResponse.
+        """
+        self._ensure_connected()
+
+        try:
+            order_id = self._kite.modify_order(
+                variety=self._kite.VARIETY_REGULAR,
+                order_id=order_id,
+                quantity=order_request.quantity,
+                price=order_request.price if order_request.price > 0 else None,
+                trigger_price=order_request.trigger_price if order_request.trigger_price > 0 else None,
+                order_type=_ORDER_TYPE_MAP[order_request.order_type],
+            )
+            
+            logger.info("Zerodha order modified: %s", order_id)
+            
+            return OrderResponse(
+                order_id=str(order_id),
+                status="MODIFIED",
+                message="Order modified successfully",
+                broker=BrokerName.ZERODHA,
+            )
+
+        except Exception as exc:
+            logger.error("Zerodha modify failed: %s", exc)
+            raise BrokerConnectionError(
+                broker="Zerodha",
+                detail=f"Modify failed: {exc}",
+            )
+
     # ━━━━━━━━━━━━━━━ Private Helpers ━━━━━━━━━━━━━━━
 
     def _ensure_connected(self) -> None:

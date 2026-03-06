@@ -13,6 +13,7 @@ Every component is kept in its own module — this file ONLY assembles them.
 """
 
 import logging
+# Force reload - timestamp 2026-02-16 13:50
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -22,7 +23,8 @@ from app.config import settings
 from app.database import close_db, init_db
 from app.logging_config import setup_logging
 from app.middleware import setup_exception_handlers, setup_middleware
-from app.routers import ai, auth, backtest, broker, health, trades, watchlists
+from app.routers import ai, auth, backtest, broker, health, telegram, trades, watchlists
+from app.services.telegram_bot import telegram_bot
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +39,7 @@ async def lifespan(app: FastAPI):
     Startup:
         - Initialize logging
         - Create database tables (dev mode; use Alembic in prod)
+        - Set Telegram Webhook
 
     Shutdown:
         - Close database connection pool
@@ -48,6 +51,10 @@ async def lifespan(app: FastAPI):
         __app_name__, __version__, settings.APP_ENV, settings.DEBUG,
     )
     await init_db()
+
+    if settings.TELEGRAM_WEBHOOK_URL:
+        telegram_bot.set_webhook(settings.TELEGRAM_WEBHOOK_URL)
+
     logger.info("🚀 Application ready — accepting requests")
 
     yield  # Application runs here
@@ -86,6 +93,7 @@ app.include_router(watchlists.router)
 app.include_router(broker.router)
 app.include_router(ai.router)
 app.include_router(backtest.router)
+app.include_router(telegram.router)
 
 
 # ━━━━━━━━━━━━━━━ Root ━━━━━━━━━━━━━━━

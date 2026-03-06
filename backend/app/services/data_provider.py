@@ -49,6 +49,7 @@ class DataProvider:
         days: int = 365,
         interval: str = "ONE_DAY",
         use_cache: bool = True,
+        data_source: str | None = None,
     ) -> pd.DataFrame:
         """Fetch OHLCV data using fallback chain.
 
@@ -57,12 +58,16 @@ class DataProvider:
             days: Number of historical days to fetch.
             interval: Candle interval (default: daily).
             use_cache: Whether to use cached data.
+            data_source: Force a specific data source:
+                - "angel_one": Only use Angel One broker data.
+                - "yfinance": Only use Yahoo Finance data.
+                - None: Automatic fallback (Angel One → yfinance → demo).
 
         Returns:
             DataFrame with columns: Open, High, Low, Close, Volume.
             Index is DatetimeIndex.
         """
-        cache_key = f"{symbol}_{days}_{interval}"
+        cache_key = f"{symbol}_{days}_{interval}_{data_source or 'auto'}"
 
         # Check cache
         if use_cache and cache_key in self._cache:
@@ -72,17 +77,37 @@ class DataProvider:
                 logger.debug("Cache hit for %s (age: %.1f min)", symbol, age_minutes)
                 return cached_df.copy()
 
-        # Tier 1: Angel One (if connected)
-        df = await self._fetch_from_angel(symbol, days, interval)
+        df = None
 
-        # Tier 2: yfinance (free fallback)
-        if df is None or df.empty:
+        if data_source == "angel_one":
+            # Force Angel One only
+            df = await self._fetch_from_angel(symbol, days, interval)
+            if df is None or df.empty:
+                logger.warning(
+                    "Angel One data unavailable for %s (broker not connected or fetch failed)",
+                    symbol,
+                )
+                # Return empty — don't fallback when user explicitly chose Angel One
+                return pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume"])
+        elif data_source == "yfinance":
+            # Force yfinance only
             df = self._fetch_from_yfinance(symbol, days)
+            if df is None or df.empty:
+                logger.warning("yfinance data unavailable for %s", symbol)
+                return pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume"])
+        else:
+            # Automatic fallback chain
+            # Tier 1: Angel One (if connected)
+            df = await self._fetch_from_angel(symbol, days, interval)
 
-        # Tier 3: Demo data (always works)
-        if df is None or df.empty:
-            logger.warning("Using demo data for %s (no real data available)", symbol)
-            df = self._generate_demo_data(symbol, days)
+            # Tier 2: yfinance (free fallback)
+            if df is None or df.empty:
+                df = self._fetch_from_yfinance(symbol, days)
+
+            # Tier 3: Demo data (always works)
+            if df is None or df.empty:
+                logger.warning("Using demo data for %s (no real data available)", symbol)
+                df = self._generate_demo_data(symbol, days)
 
         # Cache the result
         self._cache[cache_key] = (datetime.now(), df.copy())

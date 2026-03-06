@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, X, Plus, Loader2 } from 'lucide-react';
+import { DB_SERVICE } from '../services/db';
 
 interface AddStockModalProps {
   isOpen: boolean;
@@ -11,21 +12,61 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, onAdd })
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [addingToken, setAddingToken] = useState<string | null>(null);
 
   useEffect(() => {
     const searchStocks = async () => {
       if (query.length < 2) { setResults([]); return; }
       setLoading(true);
       try {
-        const res = await fetch(`http://localhost:5000/api/search?q=${query}`);
-        const data = await res.json();
-        setResults(data);
-      } finally { setLoading(false); }
+        const data: any = await DB_SERVICE.searchStocks(query);
+        setResults(Array.isArray(data) ? data : []);
+      } catch (e) { setResults([]); }
+      finally { setLoading(false); }
     };
 
     const timeoutId = setTimeout(searchStocks, 300);
     return () => clearTimeout(timeoutId);
   }, [query]);
+
+  // Reset state when modal closes
+  useEffect(() => {
+    if (!isOpen) { setQuery(''); setResults([]); setAddingToken(null); }
+  }, [isOpen]);
+
+  const handleAdd = async (stock: any) => {
+    setAddingToken(stock.token);
+    try {
+      // Fetch live price BEFORE adding to watchlist
+      const quotes: any = await DB_SERVICE.getQuotes([stock.symbol]);
+      const q = quotes?.[stock.symbol];
+      const price = q?.price || 0;
+      const changePercent = q?.changePercent || 0;
+
+      onAdd({
+        id: Math.random().toString(36).substr(2, 9),
+        symbol: stock.symbol,
+        name: stock.name || stock.symbol,
+        token: stock.token,
+        price,
+        changePercent,
+        strategy: 'Equity'
+      });
+    } catch (e) {
+      // If price fetch fails, still add with 0
+      onAdd({
+        id: Math.random().toString(36).substr(2, 9),
+        symbol: stock.symbol,
+        name: stock.name || stock.symbol,
+        token: stock.token,
+        price: 0,
+        changePercent: 0,
+        strategy: 'Equity'
+      });
+    } finally {
+      setAddingToken(null);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -55,25 +96,24 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, onAdd })
           <div className="max-h-[300px] overflow-y-auto space-y-2 custom-scrollbar">
             {loading ? (
               <div className="py-10 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-slate-600" /></div>
+            ) : results.length === 0 && query.length >= 2 ? (
+              <div className="py-10 text-center text-slate-500 text-sm">No instruments found for "{query}"</div>
             ) : results.map((stock) => (
               <button 
-                key={stock.token}
-                onClick={() => onAdd({
-                    id: Math.random().toString(36).substr(2, 9),
-                    symbol: stock.symbol,
-                    name: stock.name,
-                    token: stock.token, // ✅ CRITICAL FIX: Add this line to save the numeric ID
-                    price: 0,
-                    changePercent: 0,
-                    strategy: 'MANUAL'
-                })}
-                className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-blue-500/10 border border-transparent hover:border-blue-500/20 transition-all group"
+                key={`${stock.exch_seg || 'NSE'}-${stock.token}`}
+                disabled={addingToken === stock.token}
+                onClick={() => handleAdd(stock)}
+                className={`w-full flex items-center justify-between p-3 rounded-xl hover:bg-blue-500/10 border border-transparent hover:border-blue-500/20 transition-all group ${addingToken === stock.token ? 'opacity-60 pointer-events-none' : ''}`}
               >
                 <div className="text-left">
-                  <div className="text-white font-bold group-hover:text-blue-400">{stock.symbol}</div>
-                  <div className="text-[10px] text-slate-500 uppercase">{stock.name}</div>
+                  <div className="text-white font-bold group-hover:text-blue-400">{stock.symbol.replace(/-EQ$/, '').replace(/-BE$/, '')}</div>
+                  <div className="text-[10px] text-slate-500 uppercase">{stock.name || stock.symbol} &middot; {stock.exch_seg || 'NSE'}</div>
                 </div>
-                <Plus className="w-4 h-4 text-slate-600 group-hover:text-blue-400" />
+                {addingToken === stock.token ? (
+                  <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                ) : (
+                  <Plus className="w-4 h-4 text-slate-600 group-hover:text-blue-400" />
+                )}
               </button>
             ))}
           </div>

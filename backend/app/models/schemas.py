@@ -54,12 +54,33 @@ class LoginRequest(BaseModel):
     password: str = Field(..., min_length=4, max_length=100)
 
 
+
 class TokenResponse(BaseModel):
     """JWT token returned after successful login."""
 
     access_token: str
     token_type: str = "bearer"
     expires_in_minutes: int
+
+
+class UserCreate(BaseModel):
+    """Request body for user registration."""
+
+    username: str = Field(..., min_length=3, max_length=50, examples=["trader1"])
+    email: str = Field(..., examples=["trader@example.com"])
+    password: str = Field(..., min_length=6, max_length=100, description="Password (min 6 chars)")
+
+
+class UserResponse(BaseModel):
+    """User profile data returned to client."""
+
+    id: int
+    username: str
+    email: str
+    is_active: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 # ━━━━━━━━━━━━━━━ Trade Schemas ━━━━━━━━━━━━━━━
@@ -164,6 +185,11 @@ class BrokerConnectRequest(BaseModel):
     """Request body for connecting to a broker."""
 
     broker: str = Field(..., examples=["angel", "zerodha", "paper"], description="Broker name")
+    # Optional: Frontend can send credentials directly (encrypted in transit via HTTPS)
+    api_key: Optional[str] = Field(default=None, description="Broker API key (optional, falls back to .env)")
+    client_id: Optional[str] = Field(default=None, description="Client ID / code (optional)")
+    password: Optional[str] = Field(default=None, description="PIN / password (optional)")
+    totp_secret: Optional[str] = Field(default=None, description="TOTP secret (optional)")
 
 
 class OrderCreateRequest(BaseModel):
@@ -177,6 +203,14 @@ class OrderCreateRequest(BaseModel):
     price: float = Field(default=0.0, ge=0, examples=[2450.50])
     trigger_price: float = Field(default=0.0, ge=0)
     product: str = Field(default="DELIVERY", examples=["DELIVERY", "INTRADAY"])
+
+
+class OrderModifyRequest(BaseModel):
+    """Request body for modifying an order."""
+
+    price: float = Field(default=0.0, ge=0, examples=[2455.00])
+    trigger_price: float = Field(default=0.0, ge=0)
+    quantity: int = Field(default=0, ge=0, examples=[0])
 
 
 class OrderResponseSchema(BaseModel):
@@ -336,10 +370,12 @@ class NewsArticleSchema(BaseModel):
     url: str
     content: str
     score: float
+    published_date: Optional[str] = None
+    source: Optional[str] = None
 
 
 class NewsSearchSchema(BaseModel):
-    """News search response."""
+    """News search response -- supports both Gemini and Tavily backends."""
 
     symbol: str
     query: str
@@ -348,6 +384,9 @@ class NewsSearchSchema(BaseModel):
     sentiment_score: Optional[float] = None
     sentiment_summary: Optional[str] = None
     article_count: int
+    key_drivers: Optional[list[str]] = None
+    risk_factors: Optional[list[str]] = None
+    tavily_answer: Optional[str] = None  # Kept for backward compatibility
 
 
 class PerformanceMetricsSchema(BaseModel):
@@ -395,6 +434,11 @@ class BacktestRequest(BaseModel):
     params: Optional[dict] = Field(
         default=None,
         description="Override default strategy parameters",
+    )
+    data_source: Optional[str] = Field(
+        default=None,
+        description="Data source: 'angel_one' for live broker data, 'yfinance' for Yahoo Finance. "
+                    "If not set, uses automatic fallback (Angel One → yfinance → demo).",
     )
 
 

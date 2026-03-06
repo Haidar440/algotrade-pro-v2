@@ -23,51 +23,25 @@ from app.strategies.base import StrategyBase
 
 
 def _supertrend(high, low, close, period=10, multiplier=3.0):
-    """Calculate Supertrend indicator.
+    """Calculate Supertrend direction using pandas_ta's built-in implementation.
 
     Returns 1 for bullish, -1 for bearish.
+    Uses pandas_ta.supertrend() which is battle-tested and handles
+    band adjustment logic correctly.
     """
-    atr = ta.atr(
-        pd.Series(high), pd.Series(low), pd.Series(close), length=period,
+    result = ta.supertrend(
+        pd.Series(high), pd.Series(low), pd.Series(close),
+        length=int(period), multiplier=float(multiplier),
     )
-    if atr is None:
+    if result is None:
         return np.zeros(len(close))
 
-    hl2 = (pd.Series(high) + pd.Series(low)) / 2
-    upper_band = hl2 + multiplier * atr
-    lower_band = hl2 - multiplier * atr
+    # pandas_ta returns: SUPERT_{period}_{mult}, SUPERTd_{period}_{mult}, ...
+    dir_col = [c for c in result.columns if "SUPERTd" in c]
+    if not dir_col:
+        return np.zeros(len(close))
 
-    supertrend = np.zeros(len(close))
-    direction = np.ones(len(close))  # 1 = bullish, -1 = bearish
-
-    for i in range(1, len(close)):
-        # Adjust bands
-        if lower_band.iloc[i] > lower_band.iloc[i - 1] or close[i - 1] < lower_band.iloc[i - 1]:
-            pass  # Keep current lower band
-        else:
-            lower_band.iloc[i] = lower_band.iloc[i - 1]
-
-        if upper_band.iloc[i] < upper_band.iloc[i - 1] or close[i - 1] > upper_band.iloc[i - 1]:
-            pass  # Keep current upper band
-        else:
-            upper_band.iloc[i] = upper_band.iloc[i - 1]
-
-        # Determine direction
-        if direction[i - 1] == 1:  # Was bullish
-            if close[i] < lower_band.iloc[i]:
-                direction[i] = -1
-                supertrend[i] = upper_band.iloc[i]
-            else:
-                direction[i] = 1
-                supertrend[i] = lower_band.iloc[i]
-        else:  # Was bearish
-            if close[i] > upper_band.iloc[i]:
-                direction[i] = 1
-                supertrend[i] = lower_band.iloc[i]
-            else:
-                direction[i] = -1
-                supertrend[i] = upper_band.iloc[i]
-
+    direction = result[dir_col[0]].fillna(1).values.astype(float)
     return direction
 
 

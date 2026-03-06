@@ -22,7 +22,7 @@ const PaperTradingDashboard: React.FC<PaperTradingDashboardProps> = ({ brokerSta
   // --- 1. Fetch Trades ---
   const fetchPortfolio = async () => {
     try {
-        const allTrades = await DB_SERVICE.getTrades();
+        const allTrades = (await DB_SERVICE.getTrades() as any[]) || [];
         const paperTrades = allTrades.filter((t: any) => t.type === 'PAPER').reverse();
         setTrades(paperTrades);
     } catch (e) {
@@ -48,11 +48,11 @@ const PaperTradingDashboard: React.FC<PaperTradingDashboardProps> = ({ brokerSta
     const angel = new AngelOne(brokerState.angel);
     
     const fetchLivePrices = async () => {
-        const uniqueSymbols = Array.from(new Set(activeTrades.map(t => t.symbol)));
+        const uniqueSymbols: string[] = Array.from(new Set(activeTrades.map((t: any) => t.symbol as string)));
 
         for (const sym of uniqueSymbols) {
             try {
-                const token = await angel.searchSymbolToken(sym);
+                const token: string = await angel.searchSymbolToken(sym);
                 if (token) {
                     const ltpData = await angel.getLtpValue("NSE", token, sym);
                     if (ltpData && ltpData.price > 0) {

@@ -1,15 +1,21 @@
 import { io, Socket } from "socket.io-client";
 
-const SOCKET_URL = "http://localhost:5000";
+// WebSocket streaming — will connect to backend when Sprint 6 adds WebSocket support
+// For now, gracefully handles disconnection without errors
+const SOCKET_URL = "http://localhost:8000";
 
 class StreamingService {
   private socket: Socket;
   private subscribers: Map<string, (price: number) => void> = new Map();
-  // ✅ New Cache to store the last seen price for every token
   private lastPrices: Map<string, number> = new Map();
 
   constructor() {
-    this.socket = io(SOCKET_URL);
+    this.socket = io(SOCKET_URL, {
+      transports: ['websocket'],
+      reconnectionAttempts: 3,
+      reconnectionDelay: 5000,
+      autoConnect: false, // Don't auto-connect until Sprint 6 WebSocket is ready
+    });
 
     this.socket.on("connect", () => {
       console.log("🟢 Streaming Service: Connected to Backend");
@@ -17,6 +23,10 @@ class StreamingService {
 
     this.socket.on("disconnect", () => {
       console.log("🔴 Streaming Service: Disconnected");
+    });
+
+    this.socket.on("connect_error", () => {
+      // Silently handle — WebSocket not available yet (Sprint 6)
     });
 
     this.socket.on("price-update", (data: any) => {

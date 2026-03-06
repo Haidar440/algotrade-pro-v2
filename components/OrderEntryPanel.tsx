@@ -85,8 +85,8 @@ const OrderEntryPanel: React.FC<Props> = ({ symbol, token, ltp, onClose }) => {
             ordertype: orderType,
             producttype: productType === 'INTRADAY' ? 'INTRADAY' : 'DELIVERY',
             duration: "DAY",
-            price: orderType === 'LIMIT' ? parseFloat(price) : 0,
-            quantity: quantity
+            price: orderType === 'LIMIT' ? price : '0',
+            quantity: quantity.toString()
         });
 
         if (res.status) {

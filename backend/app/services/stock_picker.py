@@ -2,23 +2,25 @@
 Module: app/services/stock_picker.py
 Purpose: Smart Stock Picker — scans stocks, scores them, and recommends picks.
 
-Combines technical analysis, AI reasoning, and news sentiment into a
-composite score (0-100) for each stock. Returns top picks with entry,
-stop loss, and target prices tailored to the user's capital.
+Combines technical analysis, fundamentals (yfinance), relative strength
+vs Nifty 50, and news sentiment into a composite score (0-100).
+Returns top picks with entry, stop loss, and target prices tailored
+to the user's capital.
 
 Scoring Algorithm (100 points):
     Technical (40): RSI, MACD, ADX, EMA alignment, Support proximity, BB squeeze
-    Volume (20): Volume spike, Delivery %, MFI pressure
-    Strength (15): Relative strength vs Nifty, Sector trend
-    Fundamentals (15): PE ratio, Market cap, Debt (future)
-    News (10): Positive/negative news sentiment
+    Volume (20): Volume spike, Volume trend consistency, MFI pressure
+    Strength (15): Relative strength vs Nifty 50, Sector momentum
+    Fundamentals (15): PE ratio, Market cap, Debt-to-equity
+    News (10): Gemini news sentiment
 """
 
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Optional
 
 import pandas as pd
+import yfinance as yf
 
 from app.constants import PickerRating, Signal
 from app.services.technical import (
@@ -48,16 +50,16 @@ class StockScore:
     # Volume (20 pts max)
     volume_spike_score: float = 0.0   # 10 pts
     mfi_score: float = 0.0           # 5 pts
-    delivery_score: float = 0.0      # 5 pts (future: NSE bhavcopy)
+    delivery_score: float = 0.0      # 5 pts — volume trend consistency
 
     # Strength (15 pts max)
-    relative_strength_score: float = 0.0  # 10 pts (future: vs Nifty)
-    sector_score: float = 0.0             # 5 pts (future)
+    relative_strength_score: float = 0.0  # 10 pts — vs Nifty 50
+    sector_score: float = 0.0             # 5 pts — sector momentum
 
     # Fundamentals (15 pts max)
-    pe_score: float = 0.0       # 5 pts (future: yfinance)
-    mcap_score: float = 0.0     # 5 pts (future)
-    debt_score: float = 0.0     # 5 pts (future)
+    pe_score: float = 0.0       # 5 pts — yfinance PE ratio
+    mcap_score: float = 0.0     # 5 pts — yfinance market cap
+    debt_score: float = 0.0     # 5 pts — yfinance debt-to-equity
 
     # News (10 pts max)
     news_score: float = 0.0     # 10 pts
@@ -119,8 +121,9 @@ class StockPick:
 class StockPicker:
     """Smart Stock Picker — scans, scores, and recommends stocks.
 
-    Combines technical analysis with optional AI/news sentiment to
-    produce a ranked list of stock picks with entry/SL/target levels.
+    Combines technical analysis with yfinance fundamentals, Nifty relative
+    strength, and Gemini news sentiment to produce a ranked list of stock
+    picks with entry/SL/target levels.
 
     Example:
         picker = StockPicker(analyzer=TechnicalAnalyzer())
@@ -134,6 +137,9 @@ class StockPicker:
     DEFAULT_TARGET_PERCENT = 8.0  # 8% target (2:1 RR)
     MAX_RISK_PER_TRADE_PCT = 20  # Max 20% of capital per trade
 
+    # Cache for Nifty 50 returns (refreshed per scan)
+    _nifty_return: Optional[float] = None
+
     def __init__(
         self,
         analyzer: Optional[TechnicalAnalyzer] = None,
@@ -144,6 +150,7 @@ class StockPicker:
             analyzer: TechnicalAnalyzer instance (created if not provided).
         """
         self._analyzer = analyzer or TechnicalAnalyzer()
+        self._fundamentals_cache: dict[str, dict[str, Any]] = {}
 
     async def scan_stocks(
         self,
@@ -167,6 +174,12 @@ class StockPicker:
         """
         picks = []
         news_sentiments = news_sentiments or {}
+
+        # Pre-fetch Nifty 50 return for relative strength scoring
+        self._nifty_return = self._get_nifty_return()
+
+        # Pre-fetch fundamentals for all symbols in one batch
+        self._prefetch_fundamentals(list(stock_data.keys()))
 
         for symbol, df in stock_data.items():
             try:
@@ -195,16 +208,82 @@ class StockPicker:
 
         return picks[:top_n]
 
+    def _get_nifty_return(self) -> float:
+        """Get Nifty 50 1-month return for relative strength calculation."""
+        try:
+            nifty = yf.Ticker("^NSEI")
+            hist = nifty.history(period="1mo")
+            if hist is not None and len(hist) >= 2:
+                ret = ((hist["Close"].iloc[-1] / hist["Close"].iloc[0]) - 1) * 100
+                logger.info("Nifty 50 1-month return: %.2f%%", ret)
+                return float(ret)
+        except Exception as e:
+            logger.warning("Failed to fetch Nifty return: %s", e)
+        return 0.0
+
+    def _prefetch_fundamentals(self, symbols: list[str]) -> None:
+        """Batch-fetch fundamentals from yfinance for all symbols.
+
+        Fetches PE ratio, market cap, and debt-to-equity in one pass.
+        Results cached in self._fundamentals_cache.
+        """
+        self._fundamentals_cache.clear()
+        nse_symbols = [f"{sym}.NS" for sym in symbols]
+
+        try:
+            tickers = yf.Tickers(" ".join(nse_symbols))
+            for sym, nse_sym in zip(symbols, nse_symbols):
+                try:
+                    ticker = tickers.tickers.get(nse_sym)
+                    if not ticker:
+                        continue
+                    info = ticker.info or {}
+                    self._fundamentals_cache[sym] = {
+                        "pe": info.get("trailingPE") or info.get("forwardPE"),
+                        "mcap": info.get("marketCap"),
+                        "debt_to_equity": info.get("debtToEquity"),
+                        "sector": info.get("sector", ""),
+                        "return_1mo": self._calc_stock_return(ticker),
+                    }
+                    logger.debug(
+                        "Fundamentals %s: PE=%.1f, Mcap=%s, D/E=%s",
+                        sym,
+                        self._fundamentals_cache[sym].get("pe") or 0,
+                        self._fundamentals_cache[sym].get("mcap"),
+                        self._fundamentals_cache[sym].get("debt_to_equity"),
+                    )
+                except Exception as e:
+                    logger.debug("Fundamentals skip %s: %s", sym, e)
+        except Exception as e:
+            logger.warning("Batch fundamentals fetch failed: %s", e)
+
+    @staticmethod
+    def _calc_stock_return(ticker: Any) -> Optional[float]:
+        """Calculate 1-month return for a stock ticker."""
+        try:
+            hist = ticker.history(period="1mo")
+            if hist is not None and len(hist) >= 2:
+                return float(
+                    ((hist["Close"].iloc[-1] / hist["Close"].iloc[0]) - 1) * 100
+                )
+        except Exception:
+            pass
+        return None
+
     def score_stock(
         self,
         analysis: TechnicalAnalysisResult,
         news_sentiment: Optional[dict] = None,
+        symbol: str = "",
+        df: Optional[pd.DataFrame] = None,
     ) -> StockScore:
-        """Score a single stock based on its technical analysis.
+        """Score a single stock based on technicals, fundamentals, and news.
 
         Args:
             analysis: TechnicalAnalysisResult from the analyzer.
             news_sentiment: Optional sentiment dict with 'score' (-100 to 100).
+            symbol: Stock symbol for fundamentals lookup.
+            df: OHLCV DataFrame for volume trend analysis.
 
         Returns:
             StockScore with detailed breakdown.
@@ -294,19 +373,23 @@ class StockPicker:
         else:
             score.mfi_score = 2.0
 
-        # Delivery % (5 pts) — placeholder for NSE bhavcopy integration
-        score.delivery_score = 2.5  # Default mid score until data source added
+        # Volume trend consistency (5 pts) — are recent volumes rising?
+        score.delivery_score = self._score_volume_trend(df)
 
-        # ── Strength (15 pts) ──
-        # Placeholder — will use Nifty relative strength + sector data later
-        score.relative_strength_score = 5.0  # Default mid
-        score.sector_score = 2.5
+        # ── Strength (15 pts) — REAL DATA via yfinance ──
+        fundamentals = self._fundamentals_cache.get(symbol, {})
 
-        # ── Fundamentals (15 pts) ──
-        # Placeholder — will integrate yfinance for PE, mcap, debt
-        score.pe_score = 2.5
-        score.mcap_score = 2.5
-        score.debt_score = 2.5
+        # Relative strength vs Nifty 50 (10 pts)
+        stock_return = fundamentals.get("return_1mo")
+        score.relative_strength_score = self._score_relative_strength(stock_return)
+
+        # Sector momentum (5 pts) — based on stock's own momentum profile
+        score.sector_score = self._score_sector_momentum(df, iv)
+
+        # ── Fundamentals (15 pts) — REAL DATA via yfinance ──
+        score.pe_score = self._score_pe(fundamentals.get("pe"))
+        score.mcap_score = self._score_mcap(fundamentals.get("mcap"))
+        score.debt_score = self._score_debt(fundamentals.get("debt_to_equity"))
 
         # ── News (10 pts) ──
         if news_sentiment:
@@ -328,6 +411,174 @@ class StockPicker:
 
         return score
 
+    # ━━━━━━━━━━━ Real Scoring Helpers ━━━━━━━━━━━
+
+    @staticmethod
+    def _score_volume_trend(df: Optional[pd.DataFrame]) -> float:
+        """Score volume trend consistency (5 pts).
+
+        Checks if recent 5-day average volume is rising vs 20-day average.
+        Rising volume on up-days = accumulation = bullish.
+        """
+        if df is None or len(df) < 20:
+            return 2.5  # Not enough data
+
+        try:
+            vol = df["volume"] if "volume" in df.columns else df.get("Volume")
+            if vol is None:
+                return 2.5
+
+            avg_5 = vol.tail(5).mean()
+            avg_20 = vol.tail(20).mean()
+
+            if avg_20 <= 0:
+                return 2.5
+
+            ratio = avg_5 / avg_20
+            if ratio >= 1.5:
+                return 5.0   # Strong volume accumulation
+            elif ratio >= 1.2:
+                return 4.0
+            elif ratio >= 0.8:
+                return 2.5   # Normal volume
+            else:
+                return 1.0   # Volume drying up — distribution
+        except Exception:
+            return 2.5
+
+    def _score_relative_strength(self, stock_return: Optional[float]) -> float:
+        """Score relative strength vs Nifty 50 (10 pts).
+
+        Compares stock's 1-month return to Nifty 50's 1-month return.
+        Outperforming stocks get higher scores.
+        """
+        if stock_return is None:
+            return 3.0  # No data — slightly below mid
+
+        nifty_ret = self._nifty_return or 0.0
+        excess = stock_return - nifty_ret  # Excess return over Nifty
+
+        if excess >= 10:
+            return 10.0  # Massive outperformer
+        elif excess >= 5:
+            return 8.0
+        elif excess >= 2:
+            return 6.0
+        elif excess >= 0:
+            return 4.0   # In line with market
+        elif excess >= -5:
+            return 2.0   # Underperforming
+        else:
+            return 0.0   # Severe underperformer
+
+    @staticmethod
+    def _score_sector_momentum(
+        df: Optional[pd.DataFrame], iv: IndicatorValues
+    ) -> float:
+        """Score sector/price momentum (5 pts).
+
+        Uses price position relative to 52-week range and short-term momentum.
+        """
+        if df is None or len(df) < 20:
+            return 2.0
+
+        try:
+            close = df["close"] if "close" in df.columns else df.get("Close")
+            if close is None:
+                return 2.0
+
+            price = float(close.iloc[-1])
+            high_52w = float(close.max())
+            low_52w = float(close.min())
+
+            if high_52w == low_52w:
+                return 2.0
+
+            # Position in range (0-100%)
+            position = (price - low_52w) / (high_52w - low_52w) * 100
+
+            # Sweet spot: 60-85% of range (strong but not overextended)
+            if 60 <= position <= 85:
+                return 5.0
+            elif 40 <= position < 60:
+                return 4.0  # Recovering
+            elif position > 85:
+                return 2.0  # Near high — limited upside
+            elif 20 <= position < 40:
+                return 3.0  # Beaten down — could bounce
+            else:
+                return 1.0  # Near lows — falling knife
+        except Exception:
+            return 2.0
+
+    @staticmethod
+    def _score_pe(pe: Optional[float]) -> float:
+        """Score PE ratio (5 pts). Lower PE = better value.
+
+        Indian market context: Nifty avg PE ~22.
+        """
+        if pe is None or pe <= 0:
+            return 2.0  # No data or loss-making
+
+        if pe <= 15:
+            return 5.0   # Deep value
+        elif pe <= 22:
+            return 4.0   # Fair value
+        elif pe <= 35:
+            return 3.0   # Growth premium
+        elif pe <= 60:
+            return 1.5   # Expensive
+        else:
+            return 0.5   # Very expensive
+
+    @staticmethod
+    def _score_mcap(mcap: Optional[float]) -> float:
+        """Score market cap (5 pts). Prefer large & mid caps for safety.
+
+        Indian market context (INR):
+        - Large cap: > ₹50,000 Cr (500B)
+        - Mid cap: ₹10,000 - 50,000 Cr
+        - Small cap: < ₹10,000 Cr (100B)
+        """
+        if mcap is None or mcap <= 0:
+            return 2.0  # No data
+
+        mcap_cr = mcap / 1e7  # Convert to Crores (yfinance returns in currency)
+
+        if mcap_cr >= 100_000:
+            return 5.0   # Mega cap — safest
+        elif mcap_cr >= 50_000:
+            return 4.5   # Large cap
+        elif mcap_cr >= 10_000:
+            return 4.0   # Mid cap — good growth + stability
+        elif mcap_cr >= 2_000:
+            return 3.0   # Small cap — riskier
+        else:
+            return 1.5   # Micro cap — high risk
+
+    @staticmethod
+    def _score_debt(debt_to_equity: Optional[float]) -> float:
+        """Score debt-to-equity ratio (5 pts). Lower debt = healthier.
+
+        Indian market context:
+        - D/E < 0.5: Very low debt (excellent)
+        - D/E 0.5-1.0: Moderate debt
+        - D/E > 1.5: High debt (risky)
+        """
+        if debt_to_equity is None:
+            return 2.5  # No data (common for financials)
+
+        if debt_to_equity <= 0.3:
+            return 5.0   # Almost debt-free
+        elif debt_to_equity <= 0.5:
+            return 4.0   # Low debt
+        elif debt_to_equity <= 1.0:
+            return 3.0   # Moderate
+        elif debt_to_equity <= 1.5:
+            return 1.5   # High debt
+        else:
+            return 0.5   # Heavily leveraged
+
     # ━━━━━━━━━━━━ Private ━━━━━━━━━━━━
 
     def _analyze_stock(
@@ -345,7 +596,9 @@ class StockPicker:
             logger.debug("Skipping %s: %s", symbol, e)
             return None
 
-        score = self.score_stock(analysis, news_sentiment)
+        score = self.score_stock(
+            analysis, news_sentiment, symbol=symbol, df=df,
+        )
         total = score.total
         rating = self._get_rating(total)
 
@@ -378,7 +631,9 @@ class StockPicker:
         entry_high = round(price * 1.01, 2)  # +1%
 
         # Build reasons
-        reasons = self._build_reasons(analysis, score)
+        reasons = self._build_reasons(
+            analysis, score, symbol=symbol, news_sentiment=news_sentiment,
+        )
 
         return StockPick(
             symbol=symbol,
@@ -408,15 +663,19 @@ class StockPicker:
         else:
             return PickerRating.SKIP.value
 
-    @staticmethod
     def _build_reasons(
-        analysis: TechnicalAnalysisResult, score: StockScore
+        self,
+        analysis: TechnicalAnalysisResult,
+        score: StockScore,
+        symbol: str = "",
+        news_sentiment: Optional[dict] = None,
     ) -> list[str]:
         """Build human-readable reasons for the pick."""
         reasons = []
         iv = analysis.indicators
         signals = analysis.signals
 
+        # Technical reasons
         if signals.macd_signal == "BULLISH":
             reasons.append("MACD bullish crossover")
         if signals.rsi_signal == "OVERSOLD":
@@ -436,4 +695,28 @@ class StockPicker:
         if signals.adx_signal == "STRONG_TREND":
             reasons.append(f"Strong trend (ADX {iv.adx:.0f})")
 
-        return reasons[:5]  # Max 5 reasons
+        # Fundamental reasons
+        fundamentals = self._fundamentals_cache.get(symbol, {})
+        pe = fundamentals.get("pe")
+        if pe and pe <= 15:
+            reasons.append(f"Deep value PE {pe:.1f}")
+        elif pe and pe <= 22:
+            reasons.append(f"Fair value PE {pe:.1f}")
+
+        debt = fundamentals.get("debt_to_equity")
+        if debt is not None and debt <= 0.3:
+            reasons.append("Almost debt-free balance sheet")
+
+        # Relative strength
+        if score.relative_strength_score >= 8.0:
+            reasons.append("Strong outperformer vs Nifty 50")
+
+        # News sentiment
+        if news_sentiment:
+            sentiment = news_sentiment.get("sentiment", "")
+            if sentiment == "POSITIVE":
+                reasons.append("Positive news sentiment")
+            elif sentiment == "NEGATIVE":
+                reasons.append("⚠ Negative news — caution")
+
+        return reasons[:7]  # Max 7 reasons

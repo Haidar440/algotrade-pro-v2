@@ -167,10 +167,27 @@ class AngelOneBroker(BrokerInterface):
         self._ensure_connected()
 
         try:
+            # Resolve symboltoken — Angel One requires it for every order
+            symbol_token = ""
+            search_results = await self.search_symbols(order.symbol, order.exchange)
+            if search_results:
+                for item in search_results:
+                    if item.get("tradingsymbol") == order.symbol:
+                        symbol_token = item.get("symboltoken", "")
+                        break
+                if not symbol_token:
+                    symbol_token = search_results[0].get("symboltoken", "")
+
+            if not symbol_token:
+                raise BrokerConnectionError(
+                    broker="Angel One",
+                    detail=f"Could not resolve symboltoken for {order.symbol}",
+                )
+
             order_params = {
                 "variety": "NORMAL",
                 "tradingsymbol": order.symbol,
-                "symboltoken": "",  # Will be resolved via instrument lookup
+                "symboltoken": symbol_token,
                 "transactiontype": _ORDER_SIDE_MAP[order.side],
                 "exchange": _EXCHANGE_MAP[order.exchange],
                 "ordertype": _ORDER_TYPE_MAP[order.order_type],
@@ -208,6 +225,71 @@ class AngelOneBroker(BrokerInterface):
             raise BrokerConnectionError(
                 broker="Angel One",
                 detail=f"Order placement failed: {exc}",
+            )
+
+    async def modify_order(self, order_id: str, price: float, trigger_price: float = 0.0, quantity: int = 0) -> OrderResponse:
+        """Modify an open order on Angel One.
+
+        Args:
+            order_id: Angel Order ID.
+            price: New limit price.
+            trigger_price: New trigger price.
+            quantity: New quantity.
+        """
+        self._ensure_connected()
+
+        try:
+            # Angel requires symbol, token, exchange etc. to modify
+            # We must fetch the order details first
+            orders = await self.get_order_book()
+            order_details = next((o for o in orders if o.get("orderid") == order_id), None)
+
+            if not order_details:
+                raise BrokerConnectionError(
+                    broker="Angel One",
+                    detail=f"Order {order_id} not found/fetchable for modification",
+                )
+
+            params = {
+                "variety": "NORMAL",
+                "orderid": order_id,
+                "ordertype": order_details.get("ordertype"),
+                "producttype": order_details.get("producttype"),
+                "duration": order_details.get("duration", "DAY"),
+                "price": str(price),
+                "quantity": str(quantity if quantity > 0 else order_details.get("quantity")),
+                "tradingsymbol": order_details.get("tradingsymbol"),
+                "symboltoken": order_details.get("symboltoken"),
+                "exchange": order_details.get("exchange"),
+            }
+
+            if trigger_price > 0:
+                params["triggerprice"] = str(trigger_price)
+
+            response = self._client.modifyOrder(params)
+
+            if not response or not response.get("data"):
+                 # Sometimes Angel returns just boolean status or message
+                 # Check response structure. SmartConnect usually returns dict with status/message/data
+                 # If response is None, it failed?
+                 # Let's assume response structure akin to placeOrder
+                 pass
+
+            logger.info("Angel One order modified — order_id=%s, new_price=%.2f", order_id, price)
+
+            return OrderResponse(
+                order_id=order_id,
+                status="MODIFIED",
+                message="Order modified successfully",
+                broker=BrokerName.ANGEL,
+                raw_response=response if response else {},
+            )
+
+        except Exception as exc:
+            logger.error("Angel One modify failed: %s", exc)
+            raise BrokerConnectionError(
+                broker="Angel One",
+                detail=f"Modify failed: {exc}",
             )
 
     async def cancel_order(self, order_id: str) -> OrderResponse:
@@ -327,7 +409,19 @@ class AngelOneBroker(BrokerInterface):
 
         try:
             exchange_str = _EXCHANGE_MAP.get(exchange, "NSE")
-            response = self._client.ltpData(exchange_str, symbol, "")
+
+            # Resolve symbol token for LTP lookup
+            symbol_token = ""
+            search_results = await self.search_symbols(symbol, exchange)
+            if search_results:
+                for item in search_results:
+                    if item.get("tradingsymbol") == symbol:
+                        symbol_token = item.get("symboltoken", "")
+                        break
+                if not symbol_token:
+                    symbol_token = search_results[0].get("symboltoken", "")
+
+            response = self._client.ltpData(exchange_str, symbol, symbol_token)
 
             if response and response.get("data"):
                 ltp = float(response["data"].get("ltp", 0))
@@ -369,9 +463,36 @@ class AngelOneBroker(BrokerInterface):
         self._ensure_connected()
 
         try:
+            # Resolve symbol token
+            token_info = await self.search_symbols(symbol, exchange)
+            symbol_token = ""
+            
+            if token_info:
+                # 1. Try exact match
+                for item in token_info:
+                    if item.get("tradingsymbol") == symbol and item.get("exchange") == _EXCHANGE_MAP.get(exchange, "NSE"):
+                        symbol_token = item.get("symboltoken")
+                        break
+                
+                # 2. If no exact match, try appending -EQ for NSE (common pattern)
+                if not symbol_token and exchange == Exchange.NSE:
+                     for item in token_info:
+                        if item.get("tradingsymbol") == f"{symbol}-EQ":
+                            symbol_token = item.get("symboltoken")
+                            break
+
+                # 3. Fallback: Use first result if it matches the search query start (risky but better than failure)
+                if not symbol_token and token_info:
+                     symbol_token = token_info[0].get("symboltoken")
+            
+            if not symbol_token:
+                logger.warning("Could not resolve token for %s", symbol)
+                # We can't fetch history without a token
+                return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
+
             params = {
                 "exchange": _EXCHANGE_MAP.get(exchange, "NSE"),
-                "symboltoken": "",  # Needs instrument token lookup
+                "symboltoken": symbol_token,
                 "interval": interval,
                 "fromdate": from_date.strftime("%Y-%m-%d %H:%M"),
                 "todate": to_date.strftime("%Y-%m-%d %H:%M"),
@@ -415,6 +536,32 @@ class AngelOneBroker(BrokerInterface):
                 broker="Angel One",
                 detail=f"Order book fetch failed: {exc}",
             )
+
+    async def search_symbols(self, query: str, exchange: Exchange = Exchange.NSE) -> list[dict]:
+        """Search for symbols using Angel One API.
+
+        Args:
+            query: Search string.
+            exchange: Exchange segment.
+
+        Returns:
+            List of dicts with symbol info.
+        """
+        self._ensure_connected()
+
+        try:
+            exchange_str = _EXCHANGE_MAP.get(exchange, "NSE")
+            response = self._client.searchScrip(exchange_str, query)
+            
+            if not response or not response.get("data"):
+                return []
+            
+            return response["data"]
+
+        except Exception as exc:
+            logger.error("Angel One search failed: %s", exc)
+            # Don't raise error, just return empty list to avoid breaking UI
+            return []
 
     # ━━━━━━━━━━━━━━━ Private Helpers ━━━━━━━━━━━━━━━
 

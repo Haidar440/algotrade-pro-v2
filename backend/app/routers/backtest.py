@@ -25,6 +25,7 @@ from app.models.schemas import (
 )
 from app.security.auth import get_current_user
 from app.services.backtest_engine import BacktestEngine
+from app.services.data_provider import DataProvider
 
 logger = logging.getLogger("algotrade.backtest_router")
 
@@ -33,16 +34,22 @@ router = APIRouter(
     tags=["Backtesting"],
 )
 
-# Shared engine instance (lazy-initialized)
-_engine: BacktestEngine | None = None
-
 
 def _get_engine() -> BacktestEngine:
-    """Get or create the backtest engine (singleton)."""
-    global _engine
-    if _engine is None:
-        _engine = BacktestEngine()
-    return _engine
+    """Get backtest engine with the active broker (if connected).
+
+    Checks if a broker is connected via the broker router and passes
+    it to DataProvider so Angel One live data can be used for backtesting.
+    """
+    # Import here to avoid circular imports
+    from app.routers.broker import _active_broker
+
+    angel_broker = None
+    if _active_broker is not None and _active_broker.is_connected:
+        angel_broker = _active_broker
+
+    data_provider = DataProvider(angel_broker=angel_broker)
+    return BacktestEngine(data_provider=data_provider)
 
 
 @router.get(
@@ -103,6 +110,7 @@ async def run_backtest(
         commission=request.commission,
         days=request.days,
         params=request.params,
+        data_source=request.data_source,
     )
 
     if not result.get("success"):
