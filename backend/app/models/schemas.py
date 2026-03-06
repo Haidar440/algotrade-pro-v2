@@ -93,10 +93,13 @@ class TradeCreate(BaseModel):
     entry_price: float = Field(..., gt=0, examples=[2450.50])
     quantity: int = Field(..., gt=0, le=10000, examples=[10])
     type: TradeType = Field(default=TradeType.SWING)
+    status: Optional[TradeStatus] = Field(default=None, description="Initial status; defaults to OPEN in ORM.")
     entry_date: datetime
     strategy: Optional[str] = Field(default=None, max_length=100)
     notes: Optional[str] = Field(default=None, max_length=1000)
     source: TradeSource = Field(default=TradeSource.MANUAL)
+    target_price: Optional[float] = Field(default=None, gt=0, description="Target exit price.")
+    stop_loss: Optional[float] = Field(default=None, gt=0, description="Stop-loss price.")
 
 
 class TradeUpdate(BaseModel):
@@ -125,6 +128,8 @@ class TradeResponse(BaseModel):
     strategy: Optional[str] = None
     notes: Optional[str] = None
     source: str
+    target_price: Optional[float] = None
+    stop_loss: Optional[float] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

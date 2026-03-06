@@ -275,12 +275,12 @@ export class TechnicalAnalysisEngine {
     const strategies: StrategyEvaluation[] = [];
 
     // Helper to add strategies
-    const addStrat = (name: string, isValid: boolean, riskRatio: number, confidence: number, notes: string, targets: number[], stop: number) => {
+    const addStrat = (name: string, isValid: boolean, riskRatio: number, confidence: number, notes: string, targets: number[], stop: number, signalType: 'BUY' | 'SELL' | 'NO-TRADE' = isValid ? 'BUY' : 'NO-TRADE') => {
         strategies.push({
             strategy_name: name,
             is_valid: isValid,
-            signal: isValid ? 'BUY' : 'NO-TRADE',
-            ideal_entry_range: [price, price * 1.01],
+            signal: signalType,
+            ideal_entry_range: [price, price * (signalType === 'SELL' ? 0.99 : 1.01)],
             stop_loss: Number(stop.toFixed(2)),
             target_prices: targets.map(t => Number(t.toFixed(2))),
             risk_reward_ratio: riskRatio,
@@ -320,7 +320,7 @@ export class TechnicalAnalysisEngine {
     // 4. RSI Divergence
     const priceLow5 = this.lowest(lows, 5);
     const priceLow15 = this.lowest(lows, 15);
-    const isDivergence = priceLow5 < priceLow15 && rsi > 30 && rsi < 50;
+    const isDivergence = priceLow5 < priceLow15 && rsi >= 25 && rsi < 50;
     addStrat("RSI Divergence", isDivergence, 3, 0.85,
         isDivergence ? "Bullish Divergence detected." : "No divergence.",
         [price * 1.08], priceLow5);
@@ -363,9 +363,9 @@ export class TechnicalAnalysisEngine {
         [price + spread * 2], curr.low);
 
     // 10. Stochastic Oversold Bounce
-    const stochOversold = stoch < 20 && prev.close < curr.close && condition === 'UPTREND';
-    addStrat("Stochastic Oversold Bounce", stochOversold, 2.5, 0.82,
-        stochOversold ? "Stochastic < 20 turning up." : "Not oversold.",
+    const stochOversold = stoch < 20 && prev.close < curr.close;
+    addStrat("Stochastic Oversold Bounce", stochOversold, 2.5, stochOversold && condition === 'UPTREND' ? 0.85 : 0.75,
+        stochOversold ? `Stochastic ${stoch.toFixed(0)} < 20 turning up.` : "Not oversold.",
         [price * 1.08], this.lowest(lows, 5));
 
     // 11. MACD Histogram Reversal
@@ -400,10 +400,41 @@ export class TechnicalAnalysisEngine {
         bcPullback ? "Mid-cap pullback to 20-SMA." : "No setup.",
         [ema20 + (ema20 - Math.min(ema50, this.lowest(lows, 5)))], Math.min(ema50, this.lowest(lows, 5)));
 
+    // 15. RSI Oversold Bounce (Mean Reversion — works in ANY trend)
+    const rsiOversold = rsi < 30 && curr.close > curr.open; // Oversold + green candle = reversal signal
+    const rsiDeepOversold = rsi < 25;
+    const rsiOversoldConf = rsiDeepOversold ? 0.88 : 0.78;
+    addStrat("RSI Oversold Bounce", rsiOversold || rsiDeepOversold, 2.5, rsiOversoldConf,
+        rsiOversold ? `RSI ${rsi.toFixed(1)} deeply oversold — reversal likely.` 
+        : rsiDeepOversold ? `RSI ${rsi.toFixed(1)} extreme oversold — high bounce probability.`
+        : `RSI ${rsi.toFixed(1)} not oversold.`,
+        [ema20, ema50], this.lowest(lows, 5) * 0.98);
+
+    // 16. Bollinger Lower Band Bounce (Mean Reversion)
+    const nearLowerBB = price <= bb.lower * 1.01;
+    const bbBounce = nearLowerBB && curr.close > curr.open; // Near lower band + green candle
+    addStrat("BB Lower Band Bounce", bbBounce || nearLowerBB, 2.8, bbBounce ? 0.85 : 0.72,
+        nearLowerBB ? `Price near Bollinger Lower Band (${bb.lower.toFixed(2)}) — mean reversion zone.`
+        : "Price within Bollinger Bands.",
+        [bb.middle, bb.upper], bb.lower * 0.98);
+
+    // 17. Bearish Breakdown (SELL Signal)
+    const isBearish = condition === 'DOWNTREND' && price < ema20 && ema20 < ema50 && adx > 25 && rsi > 35;
+    const macdBearCross = macdData.current.macdLine < macdData.current.signalLine && macdData.prev.macdLine >= macdData.prev.signalLine;
+    const strongBear = isBearish && (macdBearCross || rsi > 50);
+    addStrat("Bearish Breakdown", isBearish, 2.5, strongBear ? 0.85 : 0.75,
+        isBearish ? `Downtrend confirmed (ADX ${adx.toFixed(0)}, below 20/50 EMA).`
+        : "No bearish breakdown.",
+        [ema50 * 0.95, this.lowest(lows, 20)], ema20 * 1.02, isBearish ? 'SELL' : 'NO-TRADE');
+
 
     /* =================== FINAL DECISION =================== */
     const activeBuys = strategies.filter(s => s.signal === 'BUY');
-    const bestStrategy = activeBuys.length ? activeBuys.sort((a, b) => b.quality_score - a.quality_score)[0] : strategies[0];
+    const activeSells = strategies.filter(s => s.signal === 'SELL');
+    const activeSignals = [...activeBuys, ...activeSells];
+    const bestStrategy = activeSignals.length 
+        ? activeSignals.sort((a, b) => b.quality_score - a.quality_score)[0] 
+        : strategies.sort((a, b) => b.quality_score - a.quality_score)[0];
 
     const technicals: Technicals = {
       rsi: Number(rsi.toFixed(2)),
@@ -418,17 +449,20 @@ export class TechnicalAnalysisEngine {
       atr14: Number(atr14.toFixed(2))
     };
 
+    const hasSignal = activeSignals.length > 0;
+    const bestSignalType = hasSignal ? bestStrategy.signal : 'NO-TRADE';
+
     const primary: PrimaryRecommendation = {
-      strategy_name: activeBuys.length ? bestStrategy.strategy_name : "No Trade Setup",
-      signal: activeBuys.length ? 'BUY' : 'NO-TRADE',
+      strategy_name: hasSignal ? bestStrategy.strategy_name : "No Trade Setup",
+      signal: bestSignalType as any,
       ideal_entry_range: bestStrategy.ideal_entry_range,
       stop_loss: bestStrategy.stop_loss,
       target_prices: bestStrategy.target_prices,
       risk_reward_ratio: bestStrategy.risk_reward_ratio,
       confidence: bestStrategy.confidence,
-      reason: activeBuys.length
-        ? `Buy Signal: ${bestStrategy.strategy_name}. ${bestStrategy.notes}`
-        : "No high-probability setup detected."
+      reason: hasSignal
+        ? `${bestSignalType} Signal: ${bestStrategy.strategy_name}. ${bestStrategy.notes}`
+        : `No high-probability setup detected. ${strategies.filter(s => s.quality_score > 0.3).map(s => s.notes).join(' ')}`
     };
 
   return {

@@ -13,9 +13,12 @@ from datetime import datetime
 import pandas as pd
 import pyotp
 from SmartApi import SmartConnect
+from sqlalchemy import select, or_
 
 from app.constants import BrokerName, Exchange, OrderSide, OrderType
 from app.exceptions import BrokerConnectionError
+from app.database import AsyncSessionLocal
+from app.models.instrument import Instrument
 from app.services.broker_interface import (
     BrokerInterface,
     Holding,
@@ -81,6 +84,75 @@ class AngelOneBroker(BrokerInterface):
     def is_connected(self) -> bool:
         """Check if Angel One session is active."""
         return self._connected and self._client is not None
+
+    async def _resolve_token(self, symbol: str, exchange: Exchange = Exchange.NSE) -> str:
+        """Resolve Angel One symboltoken for a given trading symbol.
+
+        Uses a 2-tier strategy:
+        1. Local instrument DB (fast, reliable, refreshed daily).
+        2. Angel One search API fallback (slower, may return stale tokens).
+
+        Tries exact symbol, then SYMBOL-EQ pattern (NSE equities).
+
+        Args:
+            symbol: Trading symbol (e.g., 'WIPRO', 'RELIANCE').
+            exchange: Exchange segment.
+
+        Returns:
+            Symbol token string, or empty string if not found.
+        """
+        exchange_str = _EXCHANGE_MAP.get(exchange, "NSE")
+        clean_symbol = symbol.replace("-EQ", "").replace(".NS", "").upper()
+
+        # Tier 1: Instrument DB lookup (fast, reliable)
+        try:
+            async with AsyncSessionLocal() as session:
+                # Try exact match first: WIPRO-EQ (Angel One NSE convention)
+                candidates = [f"{clean_symbol}-EQ", clean_symbol]
+                stmt = (
+                    select(Instrument.token)
+                    .where(
+                        Instrument.exch_seg == exchange_str,
+                        or_(
+                            Instrument.symbol == candidates[0],
+                            Instrument.symbol == candidates[1],
+                        ),
+                    )
+                    .limit(1)
+                )
+                result = await session.execute(stmt)
+                row = result.scalar_one_or_none()
+                if row:
+                    logger.debug("Resolved %s token from DB: %s", clean_symbol, row)
+                    return str(row)
+        except Exception as db_err:
+            logger.debug("DB token lookup failed for %s: %s", clean_symbol, db_err)
+
+        # Tier 2: Angel One search API fallback
+        try:
+            search_results = await self.search_symbols(clean_symbol, exchange)
+            if search_results:
+                # Try exact match: WIPRO-EQ or WIPRO
+                for item in search_results:
+                    ts = item.get("tradingsymbol", "")
+                    if ts in candidates:
+                        token = item.get("symboltoken", "")
+                        if token:
+                            logger.debug("Resolved %s token from API: %s", clean_symbol, token)
+                            return token
+                # Fallback: first EQ result
+                for item in search_results:
+                    ts = item.get("tradingsymbol", "")
+                    if ts.endswith("-EQ") or not any(x in ts for x in ["-", "FUT", "OPT"]):
+                        token = item.get("symboltoken", "")
+                        if token:
+                            logger.debug("Resolved %s token from API (fuzzy): %s", clean_symbol, token)
+                            return token
+        except Exception as api_err:
+            logger.warning("API token lookup failed for %s: %s", clean_symbol, api_err)
+
+        logger.error("Could not resolve symboltoken for %s on %s", clean_symbol, exchange_str)
+        return ""
 
     async def connect(self, credentials: dict) -> bool:
         """Authenticate with Angel One SmartAPI.
@@ -167,16 +239,8 @@ class AngelOneBroker(BrokerInterface):
         self._ensure_connected()
 
         try:
-            # Resolve symboltoken — Angel One requires it for every order
-            symbol_token = ""
-            search_results = await self.search_symbols(order.symbol, order.exchange)
-            if search_results:
-                for item in search_results:
-                    if item.get("tradingsymbol") == order.symbol:
-                        symbol_token = item.get("symboltoken", "")
-                        break
-                if not symbol_token:
-                    symbol_token = search_results[0].get("symboltoken", "")
+            # Resolve symboltoken via DB → API fallback
+            symbol_token = await self._resolve_token(order.symbol, order.exchange)
 
             if not symbol_token:
                 raise BrokerConnectionError(
@@ -184,9 +248,14 @@ class AngelOneBroker(BrokerInterface):
                     detail=f"Could not resolve symboltoken for {order.symbol}",
                 )
 
+            # Angel One expects tradingsymbol with -EQ suffix for NSE equities
+            trading_symbol = order.symbol
+            if order.exchange == Exchange.NSE and not trading_symbol.endswith("-EQ"):
+                trading_symbol = f"{trading_symbol}-EQ"
+
             order_params = {
                 "variety": "NORMAL",
-                "tradingsymbol": order.symbol,
+                "tradingsymbol": trading_symbol,
                 "symboltoken": symbol_token,
                 "transactiontype": _ORDER_SIDE_MAP[order.side],
                 "exchange": _EXCHANGE_MAP[order.exchange],
@@ -409,19 +478,20 @@ class AngelOneBroker(BrokerInterface):
 
         try:
             exchange_str = _EXCHANGE_MAP.get(exchange, "NSE")
+            clean_symbol = symbol.replace("-EQ", "").replace(".NS", "").upper()
 
-            # Resolve symbol token for LTP lookup
-            symbol_token = ""
-            search_results = await self.search_symbols(symbol, exchange)
-            if search_results:
-                for item in search_results:
-                    if item.get("tradingsymbol") == symbol:
-                        symbol_token = item.get("symboltoken", "")
-                        break
-                if not symbol_token:
-                    symbol_token = search_results[0].get("symboltoken", "")
+            # Resolve symbol token via DB → API fallback
+            symbol_token = await self._resolve_token(clean_symbol, exchange)
 
-            response = self._client.ltpData(exchange_str, symbol, symbol_token)
+            if not symbol_token:
+                raise BrokerConnectionError(
+                    broker="Angel One",
+                    detail=f"Could not resolve symboltoken for {clean_symbol}",
+                )
+
+            # Angel One ltpData requires tradingsymbol with -EQ suffix for NSE
+            trading_symbol = f"{clean_symbol}-EQ" if exchange == Exchange.NSE else clean_symbol
+            response = self._client.ltpData(exchange_str, trading_symbol, symbol_token)
 
             if response and response.get("data"):
                 ltp = float(response["data"].get("ltp", 0))
@@ -429,7 +499,7 @@ class AngelOneBroker(BrokerInterface):
 
             raise BrokerConnectionError(
                 broker="Angel One",
-                detail=f"No LTP data for {symbol}",
+                detail=f"No LTP data for {clean_symbol}",
             )
         except BrokerConnectionError:
             raise
@@ -463,31 +533,12 @@ class AngelOneBroker(BrokerInterface):
         self._ensure_connected()
 
         try:
-            # Resolve symbol token
-            token_info = await self.search_symbols(symbol, exchange)
-            symbol_token = ""
-            
-            if token_info:
-                # 1. Try exact match
-                for item in token_info:
-                    if item.get("tradingsymbol") == symbol and item.get("exchange") == _EXCHANGE_MAP.get(exchange, "NSE"):
-                        symbol_token = item.get("symboltoken")
-                        break
-                
-                # 2. If no exact match, try appending -EQ for NSE (common pattern)
-                if not symbol_token and exchange == Exchange.NSE:
-                     for item in token_info:
-                        if item.get("tradingsymbol") == f"{symbol}-EQ":
-                            symbol_token = item.get("symboltoken")
-                            break
-
-                # 3. Fallback: Use first result if it matches the search query start (risky but better than failure)
-                if not symbol_token and token_info:
-                     symbol_token = token_info[0].get("symboltoken")
+            # Resolve symbol token via DB → API fallback
+            clean_symbol = symbol.replace("-EQ", "").replace(".NS", "").upper()
+            symbol_token = await self._resolve_token(clean_symbol, exchange)
             
             if not symbol_token:
-                logger.warning("Could not resolve token for %s", symbol)
-                # We can't fetch history without a token
+                logger.warning("Could not resolve token for %s", clean_symbol)
                 return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
 
             params = {

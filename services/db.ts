@@ -6,16 +6,22 @@ export const DB_SERVICE = {
   // 1. Save a Trade (maps camelCase frontend fields → snake_case backend)
   saveTrade: async (trade: any) => {
     try {
-      const payload = {
+      const payload: any = {
         symbol: trade.symbol,
         entry_price: trade.entryPrice ?? trade.entry_price,
         quantity: trade.quantity,
-        type: trade.type || 'SWING',
+        type: trade.type === 'PAPER' ? 'SWING' : (trade.type || 'SWING'),
         entry_date: trade.entryDate ?? trade.entry_date ?? new Date().toISOString(),
         strategy: trade.strategy || null,
         notes: trade.notes || null,
         source: trade.source || (trade.type === 'PAPER' ? 'PAPER' : 'MANUAL'),
       };
+      // Optional fields — only send if provided
+      if (trade.status) payload.status = trade.status;
+      if (trade.target ?? trade.targetPrice ?? trade.target_price)
+        payload.target_price = trade.target ?? trade.targetPrice ?? trade.target_price;
+      if (trade.stopLoss ?? trade.stop_loss)
+        payload.stop_loss = trade.stopLoss ?? trade.stop_loss;
       return await securePost('/trades', payload);
     } catch (error) {
       console.error("❌ Failed to save trade:", error);
@@ -42,6 +48,8 @@ export const DB_SERVICE = {
         strategy: t.strategy || null,
         notes: t.notes || null,
         source: t.source,
+        target: t.target_price || null,
+        stopLoss: t.stop_loss || null,
       }));
     } catch (error) {
       console.error("❌ Failed to fetch trades:", error);

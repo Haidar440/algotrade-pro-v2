@@ -386,6 +386,7 @@ class TechnicalAnalyzer:
 
         Scoring weights:
             RSI sweet spot (30-50):     15 pts
+            RSI extreme (<25):          +10 bonus (mean reversion)
             MACD bullish:               15 pts
             EMA alignment:              15 pts
             ADX strong trend:           10 pts
@@ -398,41 +399,56 @@ class TechnicalAnalyzer:
         """
         score = 50.0  # Start neutral
 
+        # Detect mean reversion context — oversold/overbought extremes
+        is_oversold = signals.rsi_signal == "OVERSOLD"
+        is_overbought = signals.rsi_signal == "OVERBOUGHT"
+
         # RSI: favor oversold (buy) or overbought (sell)
-        if signals.rsi_signal == "OVERSOLD":
+        if is_oversold:
             score += 15
-        elif signals.rsi_signal == "OVERBOUGHT":
+            # Extreme oversold bonus — mean reversion probability increases
+            if iv.rsi < 25:
+                score += 12  # Deep oversold — strong bounce expected
+            elif iv.rsi < 30:
+                score += 8   # Oversold — reversal zone
+        elif is_overbought:
             score -= 15
+            if iv.rsi > 75:
+                score -= 5   # Deep overbought
         elif 40 <= iv.rsi <= 60:
             score += 5  # Neutral RSI — slight positive
 
-        # MACD
+        # MACD — reduced penalty in oversold context (MACD lags during reversals)
         if signals.macd_signal == "BULLISH":
             score += 15
         elif signals.macd_signal == "BEARISH":
-            score -= 15
+            score -= 5 if is_oversold else 12  # Light penalty when oversold
 
-        # EMA alignment
+        # EMA alignment — reduced penalty in oversold (price below EMAs is expected)
         if signals.ema_signal == "BULLISH":
             score += 15
         elif signals.ema_signal == "BEARISH":
-            score -= 15
+            score -= 5 if is_oversold else 10
 
         # ADX trend strength
         if signals.adx_signal == "STRONG_TREND" and iv.plus_di > iv.minus_di:
             score += 10
         elif signals.adx_signal == "STRONG_TREND" and iv.minus_di > iv.plus_di:
-            score -= 10
+            # Strong downtrend + oversold = high bounce probability
+            score += 3 if is_oversold else -5
 
-        # Supertrend
+        # Supertrend — reduced penalty in oversold (Supertrend flips late)
         if signals.supertrend_signal == "BULLISH":
             score += 15
         else:
-            score -= 15
+            score -= 5 if is_oversold else 10
 
         # Volume confirmation
         if signals.volume_signal == "HIGH":
             score += 10
+            # High volume on oversold = capitulation (bullish reversal signal)
+            if is_oversold:
+                score += 5
         elif signals.volume_signal == "LOW":
             score -= 5
 
@@ -446,9 +462,9 @@ class TechnicalAnalyzer:
         # Determine signal
         if score >= 70:
             signal = Signal.STRONG_BUY
-        elif score >= 55:
+        elif score >= 50:
             signal = Signal.BUY
-        elif score <= 30:
+        elif score <= 25:
             signal = Signal.SELL
         else:
             signal = Signal.NO_TRADE

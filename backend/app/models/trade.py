@@ -59,6 +59,12 @@ class Trade(BaseModel):
         default=TradeSource.MANUAL.value,
         nullable=False,
     )
+    target_price: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 2), nullable=True, doc="Target exit price for the position."
+    )
+    stop_loss: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 2), nullable=True, doc="Stop-loss price for the position."
+    )
 
     def __repr__(self) -> str:
         return (

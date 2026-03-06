@@ -460,7 +460,7 @@ const Dashboard: React.FC = () => {
                         <div style={{ display: currentView === 'PAPER_TRADING' ? 'block' : 'none' }}>
                             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                                 <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2"><Activity className="w-6 h-6 text-purple-400" /> Paper Trading Simulator</h2>
-                                <PaperTradingDashboard brokerState={brokerState} />
+                                <PaperTradingDashboard brokerState={brokerState} isVisible={currentView === 'PAPER_TRADING'} />
                             </div>
                         </div>
                         <div style={{ display: currentView === 'TRADE_HISTORY' ? 'block' : 'none' }}>

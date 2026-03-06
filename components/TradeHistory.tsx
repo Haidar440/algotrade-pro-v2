@@ -51,7 +51,7 @@ const TradeHistory: React.FC<Props> = ({ brokerState }) => {
         
         // 1. Filter trades by current tab
         const currentTrades = trades.filter(t => 
-            activeTab === 'PAPER' ? t.type === 'PAPER' : t.type !== 'PAPER'
+            activeTab === 'PAPER' ? t.source === 'PAPER' : t.source !== 'PAPER'
         );
 
         // 2. Realized P&L (Sum of all CLOSED trades)
@@ -116,7 +116,7 @@ const TradeHistory: React.FC<Props> = ({ brokerState }) => {
   // --- Filtering & Sorting ---
   const filteredTrades = useMemo(() => {
       let data = trades.filter(t => {
-          const matchesTab = activeTab === 'PAPER' ? t.type === 'PAPER' : t.type !== 'PAPER';
+          const matchesTab = activeTab === 'PAPER' ? t.source === 'PAPER' : t.source !== 'PAPER';
           if (!matchesTab) return false;
 
           const searchLower = searchTerm.toLowerCase();

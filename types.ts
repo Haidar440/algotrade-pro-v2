@@ -5,7 +5,7 @@ export interface Trade {
   symbol: string;
   entryPrice: number;
   quantity: number;
-  type: 'SWING' | 'INTRADAY' | 'PAPER' | 'REAL';
+  type: 'SWING' | 'INTRADAY';
   status: 'OPEN' | 'CLOSED' | 'EXITING';
   entryDate: string;
   exitDate?: string;
@@ -13,7 +13,7 @@ export interface Trade {
   pnl?: number;
   strategy?: string;
   notes?: string;
-  source?: string;
+  source?: 'MANUAL' | 'AUTO' | 'PAPER';
   target?: number;
   stopLoss?: number;
 }

@@ -52,7 +52,8 @@ async def create_trade(
     Returns:
         ApiResponse containing the created trade.
     """
-    trade = Trade(**body.model_dump())
+    trade_data = body.model_dump(exclude_none=True)
+    trade = Trade(**trade_data)
     db.add(trade)
     await db.flush()
     await db.refresh(trade)
