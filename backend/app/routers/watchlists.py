@@ -41,6 +41,7 @@ router = APIRouter(
 async def search_instruments(
     q: str = Query(..., min_length=1, max_length=50, description="Search query"),
     exchange: str = Query("NSE", description="Exchange segment filter"),
+    equity_only: bool = Query(True, description="Show only equity (EQ) stocks"),
     limit: int = Query(20, ge=1, le=100, description="Max results"),
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(get_current_user),
@@ -62,16 +63,29 @@ async def search_instruments(
     """
     query_upper = q.strip().upper()
 
+    # Build filter conditions
+    conditions = [
+        Instrument.exch_seg == exchange.upper(),
+        or_(
+            func.upper(Instrument.symbol).contains(query_upper),
+            func.upper(Instrument.name).contains(query_upper),
+        ),
+    ]
+
+    # Filter EQ-only: exclude -BE, -BL, futures, options etc.
+    if equity_only:
+        conditions.append(
+            or_(
+                Instrument.symbol.endswith("-EQ"),
+                # Also include symbols without suffix (some instruments)
+                Instrument.instrumenttype == "EQ",
+            )
+        )
+
     # Build search query — prioritize exact symbol match, then LIKE
     stmt = (
         select(Instrument)
-        .where(
-            Instrument.exch_seg == exchange.upper(),
-            or_(
-                func.upper(Instrument.symbol).contains(query_upper),
-                func.upper(Instrument.name).contains(query_upper),
-            ),
-        )
+        .where(*conditions)
         # Prioritize: exact match first, then starts-with, then contains
         .order_by(
             # Exact symbol match gets priority 0

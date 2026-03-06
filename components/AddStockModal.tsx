@@ -20,7 +20,12 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ isOpen, onClose, onAdd })
       setLoading(true);
       try {
         const data: any = await DB_SERVICE.searchStocks(query);
-        setResults(Array.isArray(data) ? data : []);
+        // Filter to EQ-only stocks (hide BE, BL, futures, options)
+        const eqOnly = Array.isArray(data) ? data.filter((item: any) => {
+          const sym = (item.symbol || '').toUpperCase();
+          return sym.endsWith('-EQ') || (!sym.includes('-') && !sym.includes('FUT') && !sym.includes('OPT'));
+        }) : [];
+        setResults(eqOnly);
       } catch (e) { setResults([]); }
       finally { setLoading(false); }
     };

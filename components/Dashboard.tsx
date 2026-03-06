@@ -6,6 +6,7 @@ import { AngelOne } from '../services/angel';
 import { TechnicalAnalysisEngine } from '../services/technicalAnalysis';
 import { analyzeStockTicker, fetchMarketIndices } from '../services/gemini';
 import { AutoTrader, AutoTraderConfig } from '../services/autoTrader';
+import { DB_SERVICE } from '../services/db';
 import { secureGet, securePost } from '../services/api';
 
 // COMPONENTS
@@ -234,26 +235,51 @@ const Dashboard: React.FC = () => {
         const value = e.target.value;
         setTicker(value);
         if (value.length >= 2) {
-            // Always start with local stock list (instant, never fails)
-            const filtered = INDIAN_STOCKS.filter(stock =>
-                stock.symbol.toLowerCase().includes(value.toLowerCase()) ||
+            // 1. Instant local results (never fails, zero latency)
+            const cleanQuery = value.toUpperCase().replace('.NS', '');
+            const localMatches = INDIAN_STOCKS.filter(stock =>
+                stock.symbol.replace('.NS', '').includes(cleanQuery) ||
                 stock.name.toLowerCase().includes(value.toLowerCase())
-            ).slice(0, 10);
-            setSuggestions(filtered);
+            ).map(s => ({
+                symbol: s.symbol.replace('.NS', ''),
+                name: s.name
+            })).slice(0, 10);
+            setSuggestions(localMatches);
             setShowSuggestions(true);
 
-            // Then try broker search for more results (non-blocking)
-            if (brokerState.angel) {
-                try {
-                    const angel = new AngelOne(brokerState.angel);
-                    const dbResults = await angel.searchScrips(value);
-                    if (dbResults.length > 0) {
-                        setSuggestions(dbResults);
+            // 2. Async DB search for wider coverage (Instrument DB — fast, no broker needed)
+            try {
+                const dbResults: any = await DB_SERVICE.searchStocks(value);
+                if (Array.isArray(dbResults) && dbResults.length > 0) {
+                    // Filter EQ-only stocks, clean up symbol names
+                    const cleaned = dbResults
+                        .filter((item: any) => {
+                            const sym = (item.symbol || '').toUpperCase();
+                            // Only show EQ stocks (skip -BE, -BL, futures, options etc.)
+                            return sym.endsWith('-EQ') || (!sym.includes('-') && !sym.includes('FUT') && !sym.includes('OPT'));
+                        })
+                        .map((item: any) => ({
+                            symbol: (item.symbol || '').replace('-EQ', '').replace('.NS', ''),
+                            name: item.name || (item.symbol || '').replace('-EQ', ''),
+                        }))
+                        .slice(0, 15);
+                    
+                    if (cleaned.length > 0) {
+                        // Merge: local matches first, then DB results (deduplicated)
+                        const seen = new Set(localMatches.map(s => s.symbol));
+                        const merged = [...localMatches];
+                        for (const item of cleaned) {
+                            if (!seen.has(item.symbol)) {
+                                merged.push(item);
+                                seen.add(item.symbol);
+                            }
+                        }
+                        setSuggestions(merged.slice(0, 15));
                     }
-                } catch (err) {
-                    // Broker search failed — local results already shown, no problem
-                    console.warn("Broker search unavailable, using local stocks");
                 }
+            } catch (err) {
+                // DB search failed — local results already shown
+                console.warn("Instrument DB search unavailable, using local stocks");
             }
         } else { setSuggestions([]); setShowSuggestions(false); }
     };
@@ -290,7 +316,7 @@ const Dashboard: React.FC = () => {
         finally { clearInterval(interval); setLoading(false); }
     };
 
-    const handleSearch = (e: React.FormEvent) => { e.preventDefault(); if (!ticker.trim()) return; setShowSuggestions(false); runAnalysis(ticker.toUpperCase()); };
+    const handleSearch = (e: React.FormEvent) => { e.preventDefault(); if (!ticker.trim()) return; setShowSuggestions(false); runAnalysis(ticker.toUpperCase().replace('.NS', '').replace('-EQ', '')); };
     const handleRefresh = () => { if (result) runAnalysis(result.symbol); else if (ticker) runAnalysis(ticker.toUpperCase()); };
     const handleManualPriceUpdate = (newPrice: number) => { setLivePrice(newPrice); if (result) setResult({ ...result, current_price: newPrice }); };
 

@@ -285,12 +285,17 @@ export class AngelOne {
 
     async searchScrip(query: string) {
         try {
-            const res: any = await secureGet(`/broker/search?q=${query}`);
-            return Array.isArray(res) ? res.map((item: any) => ({
-                symbol: item.tradingsymbol,
-                name: item.desc || item.tradingsymbol,
-                sector: 'N/A'
-            })) : [];
+            const res: any = await secureGet(`/broker/search?q=${encodeURIComponent(query)}`);
+            return Array.isArray(res) ? res
+                .filter((item: any) => {
+                    const sym = (item.tradingsymbol || item.symbol || '').toUpperCase();
+                    return sym.endsWith('-EQ') || (!sym.includes('-') && !sym.includes('FUT') && !sym.includes('OPT'));
+                })
+                .map((item: any) => ({
+                    symbol: (item.tradingsymbol || item.symbol || '').replace('-EQ', ''),
+                    name: item.name || item.desc || (item.tradingsymbol || item.symbol || '').replace('-EQ', ''),
+                    sector: 'N/A'
+                })) : [];
         } catch (e) { return []; }
     }
 
