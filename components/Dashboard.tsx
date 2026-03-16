@@ -74,7 +74,7 @@ const Dashboard: React.FC = () => {
             const trader = new AutoTrader(angel, defaultConfig);
             setAutoTraderInstance(trader);
         }
-    }, [brokerState]);
+    }, [!!brokerState.angel]);
 
     // ✅ Auto-reconnect broker on backend when frontend has credentials
     // Backend _active_broker is in-memory — lost on server restart.
@@ -464,7 +464,7 @@ const Dashboard: React.FC = () => {
                             </div>
                         </div>
                         <div style={{ display: currentView === 'TRADE_HISTORY' ? 'block' : 'none' }}>
-                            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500"><TradeHistory brokerState={brokerState} /></div>
+                            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500"><TradeHistory brokerState={brokerState} isVisible={currentView === 'TRADE_HISTORY'} /></div>
                         </div>
                         {/* Lightweight views: mount/unmount is fine */}
                         {currentView === 'AUTO_TRADER' && <div className="animate-in fade-in slide-in-from-bottom-4 duration-500"><h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2"><Bot className="w-6 h-6 text-amber-500" /> Algorithmic Trading Engine</h2><AutoTraderDashboard brokerState={brokerState} existingTrader={autoTraderInstance} /></div>}

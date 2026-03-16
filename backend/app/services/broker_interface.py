@@ -111,6 +111,21 @@ class Holding:
     pnl: float
 
 
+@dataclass
+class FundsData:
+    """Account funds/margin data — standardized across brokers.
+
+    Attributes:
+        available_cash: Free cash available for trading.
+        used_margin: Margin currently blocked by open positions/orders.
+        total_balance: Net account value (available + used).
+    """
+
+    available_cash: float
+    used_margin: float
+    total_balance: float
+
+
 # ━━━━━━━━━━━━━━━ Abstract Interface ━━━━━━━━━━━━━━━
 
 
@@ -281,5 +296,17 @@ class BrokerInterface(ABC):
 
         Returns:
             List of found symbols with tokens.
+        """
+        ...
+
+    @abstractmethod
+    async def get_funds(self) -> FundsData:
+        """Fetch account funds/margin data from the broker.
+
+        Returns:
+            FundsData with available cash, used margin, and total balance.
+
+        Raises:
+            BrokerConnectionError: If the broker API call fails.
         """
         ...

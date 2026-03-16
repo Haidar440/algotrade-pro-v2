@@ -443,6 +443,28 @@ async def get_order_book(
     )
 
 
+@router.get(
+    "/funds",
+    response_model=ApiResponse[dict],
+    summary="Get account funds and margin",
+)
+async def get_funds(
+    user: dict = Depends(get_current_user),
+) -> ApiResponse[dict]:
+    """Fetch real account funds/margin from broker (e.g., Angel One rmsLimit)."""
+    broker = _get_active_broker()
+    funds = await broker.get_funds()
+
+    return ApiResponse(
+        data={
+            "available_cash": funds.available_cash,
+            "used_margin": funds.used_margin,
+            "total_balance": funds.total_balance,
+        },
+        message="Account funds fetched",
+    )
+
+
 # ━━━━━━━━━━━━━━━ Paper Trading Endpoints ━━━━━━━━━━━━━━━
 
 

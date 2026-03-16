@@ -34,7 +34,7 @@ const ExecutionDashboard: React.FC<ExecutionDashboardProps> = ({ brokerState }) 
     }
   };
 
-  useEffect(() => { fetchData(); }, [brokerState]);
+  useEffect(() => { fetchData(); }, [!!brokerState.angel]);
 
   const handleCancelOrder = async (orderId: string) => {
     if (!window.confirm("Are you sure you want to cancel this order?")) return;

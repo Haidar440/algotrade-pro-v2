@@ -18,6 +18,7 @@ from app.constants import BrokerName, Exchange, OrderSide, OrderType
 from app.exceptions import BrokerConnectionError, RiskCheckFailedError
 from app.services.broker_interface import (
     BrokerInterface,
+    FundsData,
     Holding,
     OrderRequest,
     OrderResponse,
@@ -266,6 +267,22 @@ class PaperTrader(BrokerInterface):
             {"symbol": "HDFCBANK", "token": "1333", "exchange": "NSE"},
         ]
         return [m for m in mocks if query.upper() in m["symbol"]]
+
+    async def get_funds(self) -> FundsData:
+        """Return virtual paper trading funds.
+
+        Returns:
+            FundsData with simulated capital values.
+        """
+        used = sum(
+            abs(p["quantity"]) * p.get("average_price", 0)
+            for p in self._positions.values()
+        )
+        return FundsData(
+            available_cash=self._capital,
+            used_margin=used,
+            total_balance=self._capital + used,
+        )
 
     async def modify_order(
         self,

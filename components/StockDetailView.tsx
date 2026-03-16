@@ -56,9 +56,19 @@ const StockDetailView: React.FC<StockDetailViewProps> = ({
       setIsEditingPrice(false);
   };
 
-  // ✅ LOGIC FIX: Intercept the trade and save to DB
+  // ✅ LOGIC FIX: Intercept the trade and save to DB (with capital check)
   const handlePaperTradeWrapper = async (qty: number) => {
       try {
+          const orderValue = livePrice * qty;
+
+          // Check paper trading capital
+          const PAPER_CAPITAL_KEY = 'algoTradePro_paperCapital';
+          const currentCapital = parseFloat(localStorage.getItem(PAPER_CAPITAL_KEY) || '1000000');
+          if (orderValue > currentCapital) {
+            alert(`❌ Insufficient paper trading funds!\n\nOrder: ₹${orderValue.toLocaleString('en-IN')}\nAvailable: ₹${currentCapital.toLocaleString('en-IN')}\n\nReduce quantity or go to Paper Trading to manage your capital.`);
+            return;
+          }
+
           // 1. Save to Database
           await DB_SERVICE.saveTrade({
               symbol: result.symbol,
@@ -74,10 +84,14 @@ const StockDetailView: React.FC<StockDetailViewProps> = ({
               notes: `Manual Paper Trade via StockView`
           });
 
-          // 2. Alert User
-          alert(`✅ Paper Trade Executed: Bought ${qty} ${result.symbol}`);
+          // 2. Deduct capital
+          const newCapital = currentCapital - orderValue;
+          localStorage.setItem(PAPER_CAPITAL_KEY, String(newCapital));
 
-          // 3. Update Parent (if needed)
+          // 3. Alert User
+          alert(`✅ Paper Trade Executed: Bought ${qty} ${result.symbol}\n\n💰 Remaining capital: ₹${newCapital.toLocaleString('en-IN')}`);
+
+          // 4. Update Parent (if needed)
           if(onPaperTrade) onPaperTrade(qty);
 
       } catch(e) {

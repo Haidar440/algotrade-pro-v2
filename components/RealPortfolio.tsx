@@ -166,7 +166,7 @@ const RealPortfolio: React.FC<RealPortfolioProps> = ({ brokerState }) => {
   // --- COMPONENTS ---
   const SortableHeader = ({ label, sortKey, align = 'left' }: { label: string, sortKey: string, align?: 'left' | 'right' }) => (
     <th 
-      className={`p-4 font-bold text-xs text-slate-400 uppercase cursor-pointer hover:text-white transition-colors select-none group text-${align}`}
+      className={`p-3 md:p-4 font-semibold text-[9px] md:text-[10px] text-slate-500 uppercase tracking-wider cursor-pointer hover:text-slate-300 transition-colors select-none group`}
       onClick={() => handleSort(sortKey)}
     >
       <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
@@ -188,7 +188,7 @@ const RealPortfolio: React.FC<RealPortfolioProps> = ({ brokerState }) => {
     new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(val);
 
   const PnlBadge = ({ value }: { value: number }) => (
-    <span className={`font-mono font-bold flex items-center justify-end gap-1 ${value >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+    <span className={`font-mono font-semibold tabular-nums tracking-tight flex items-center justify-end gap-1 text-[10px] md:text-xs ${value >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
       {value >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
       {formatCurrency(value)}
     </span>
@@ -196,233 +196,260 @@ const RealPortfolio: React.FC<RealPortfolioProps> = ({ brokerState }) => {
 
   if (!brokerState.angel) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] text-slate-500">
-        <Briefcase className="w-16 h-16 mb-4 opacity-20" />
-        <h2 className="text-xl font-bold text-slate-300">Real Portfolio Locked</h2>
-        <p>Connect your Angel One account in Settings.</p>
+      <div className="flex flex-col items-center justify-center h-[60vh] text-slate-600">
+        <Briefcase className="w-12 h-12 mb-4 text-slate-800" />
+        <h2 className="text-base md:text-lg font-bold text-slate-400 tracking-tight">Real Portfolio Locked</h2>
+        <p className="text-xs text-slate-600 mt-1">Connect your Angel One account in Settings.</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-4 md:space-y-6 animate-in fade-in duration-500">
       
-      {/* Error Banner */}
+      {/* ━━━ Error Banner ━━━ */}
       {fetchError && (
-        <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-center gap-3 text-rose-200">
-          <Activity className="w-5 h-5 shrink-0" />
+        <div className="p-3 md:p-4 bg-rose-500/5 border border-rose-500/10 rounded-xl flex items-center gap-3 text-rose-300">
+          <Activity className="w-4 h-4 shrink-0" />
           <div className="flex-1">
-            <p className="font-bold text-sm">Portfolio fetch failed</p>
-            <p className="text-xs text-rose-300/70 mt-0.5">{fetchError}</p>
+            <p className="font-semibold text-xs md:text-sm">Portfolio fetch failed</p>
+            <p className="text-[10px] md:text-xs text-rose-400/60 mt-0.5">{fetchError}</p>
           </div>
-          <button onClick={fetchData} className="px-3 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-xs font-bold rounded transition-colors">
+          <button onClick={fetchData} className="px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 text-[10px] md:text-xs font-semibold rounded-lg transition-colors">
             Retry
           </button>
         </div>
       )}
 
-      {/* 1. SUMMARY HEADER */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-900 rounded-xl p-6 border border-slate-800 shadow-xl relative overflow-hidden">
-         <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl -mr-16 -mt-16"></div>
-         <div className="relative z-10">
-            <div className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Total Invested</div>
-            <div className="text-2xl font-mono text-white font-bold">{formatCurrency(totalInvested)}</div>
-         </div>
-         <div className="relative z-10">
-            <div className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Current Value</div>
-            <div className="text-2xl font-mono text-white font-bold">{formatCurrency(currentValue)}</div>
-         </div>
-         <div className="relative z-10">
-            <div className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Overall P&L</div>
-            <div className={`text-2xl font-mono font-bold ${totalPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-               {totalPnL > 0 ? '+' : ''}{formatCurrency(totalPnL)}
+      {/* ━━━ SUMMARY HEADER ━━━ */}
+      <div className="bg-[#0c1120] border border-white/[0.04] rounded-xl p-4 md:p-6 relative overflow-hidden">
+        <div className="grid grid-cols-3 md:grid-cols-4 gap-3 md:gap-6">
+          <div>
+            <div className="text-[9px] md:text-[10px] text-slate-500 uppercase font-semibold tracking-wider mb-1">Invested</div>
+            <div className="text-sm md:text-xl font-mono font-bold text-white tabular-nums tracking-tight">{formatCurrency(totalInvested)}</div>
+          </div>
+          <div>
+            <div className="text-[9px] md:text-[10px] text-slate-500 uppercase font-semibold tracking-wider mb-1">Current</div>
+            <div className="text-sm md:text-xl font-mono font-bold text-white tabular-nums tracking-tight">{formatCurrency(currentValue)}</div>
+          </div>
+          <div>
+            <div className="text-[9px] md:text-[10px] text-slate-500 uppercase font-semibold tracking-wider mb-1">P&L</div>
+            <div className={`text-sm md:text-xl font-mono font-bold tabular-nums tracking-tight ${totalPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {totalPnL > 0 ? '+' : ''}{formatCurrency(totalPnL)}
             </div>
-         </div>
-         <div className="flex items-center justify-end relative z-10">
-            <button onClick={fetchData} className="p-3 bg-slate-800 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white transition-all shadow-lg border border-slate-700">
-               <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin text-blue-400' : ''}`} />
+          </div>
+          <div className="hidden md:flex items-center justify-end">
+            <button onClick={fetchData} className="p-2.5 hover:bg-white/[0.04] rounded-lg text-slate-500 hover:text-white transition-all">
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-blue-400' : ''}`} />
             </button>
-         </div>
+          </div>
+        </div>
       </div>
 
-      {/* 2. TABS & CONTROLS */}
-      <div className="flex flex-col md:flex-row justify-between items-end gap-4 border-b border-slate-800 pb-1">
-         <div className="flex gap-1 overflow-x-auto w-full md:w-auto">
-            {[
-              { id: 'HOLDINGS', label: 'Holdings', icon: Briefcase },
-              { id: 'POSITIONS', label: 'Positions', icon: Activity },
-              { id: 'ORDERS', label: 'Orders', icon: List },
-              { id: 'FUNDS', label: 'Funds', icon: Wallet },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => { setActiveTab(tab.id as Tab); setSearchQuery(''); setCurrentPage(1); setSortConfig(null); }}
-                className={`flex items-center gap-2 px-4 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${
-                  activeTab === tab.id 
-                    ? 'border-blue-500 text-blue-400 bg-blue-500/5' 
-                    : 'border-transparent text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <tab.icon className="w-4 h-4" /> {tab.label}
-              </button>
-            ))}
-         </div>
+      {/* ━━━ TABS & SEARCH ━━━ */}
+      <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-end gap-2 md:gap-4">
+        <div className="flex bg-black/30 p-0.5 rounded-lg border border-white/[0.06] overflow-x-auto">
+          {[
+            { id: 'HOLDINGS', label: 'Holdings', icon: Briefcase },
+            { id: 'POSITIONS', label: 'Positions', icon: Activity },
+            { id: 'ORDERS', label: 'Orders', icon: List },
+            { id: 'FUNDS', label: 'Funds', icon: Wallet },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => { setActiveTab(tab.id as Tab); setSearchQuery(''); setCurrentPage(1); setSortConfig(null); }}
+              className={`flex items-center gap-1.5 px-3 md:px-4 py-1.5 md:py-2 rounded-md text-[10px] md:text-xs font-semibold transition-all whitespace-nowrap ${
+                activeTab === tab.id 
+                  ? 'bg-white/[0.08] text-white' 
+                  : 'text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              <tab.icon className="w-3.5 h-3.5" /> {tab.label}
+            </button>
+          ))}
+        </div>
 
-         {/* Search Filter */}
-         {activeTab !== 'FUNDS' && (
-             <div className="relative w-full md:w-64 mb-2">
-                <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
-                <input 
-                  type="text" 
-                  placeholder="Filter Symbol..." 
-                  value={searchQuery}
-                  onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-4 py-2 text-sm text-white focus:ring-1 focus:ring-blue-500 outline-none"
-                />
-             </div>
-         )}
+        {activeTab !== 'FUNDS' && (
+          <div className="relative w-full sm:w-56">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-600" />
+            <input 
+              type="text" 
+              placeholder="Filter symbol..." 
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+              className="w-full bg-black/20 border border-white/[0.06] rounded-lg pl-8 pr-3 py-2 text-xs md:text-sm text-white placeholder-slate-600 focus:border-blue-500/50 outline-none transition-all"
+            />
+          </div>
+        )}
+
+        {/* Mobile refresh */}
+        <button onClick={fetchData} className="md:hidden p-2 self-end hover:bg-white/[0.04] rounded-lg text-slate-500">
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-blue-400' : ''}`} />
+        </button>
       </div>
 
-      {/* 3. DATA TABLE */}
-      <div className="bg-slate-900/50 rounded-xl border border-slate-800 min-h-[300px] overflow-hidden flex flex-col">
+      {/* ━━━ DATA TABLE ━━━ */}
+      <div className="bg-[#0c1120] border border-white/[0.04] rounded-xl overflow-hidden flex flex-col min-h-[280px]">
         
         {/* FUNDS VIEW */}
         {activeTab === 'FUNDS' ? (
-           <div className="p-8 max-w-lg mx-auto w-full">
-              {funds ? (
-                  <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl border border-slate-700 p-6 shadow-2xl">
-                     <div className="flex items-center gap-3 mb-6">
-                        <div className="p-3 bg-blue-500/20 rounded-full text-blue-400"><Wallet className="w-6 h-6" /></div>
-                        <div><h3 className="text-lg font-bold text-white">Available Margin</h3></div>
-                     </div>
-                     <div className="text-4xl font-mono font-bold text-white mb-8">{formatCurrency(Number(funds.net))}</div>
-                     <div className="space-y-4 text-sm">
-                        <div className="flex justify-between border-b border-slate-700/50 pb-3"><span className="text-slate-400">Cash</span><span className="text-slate-200 font-mono">{formatCurrency(Number(funds.availablecash))}</span></div>
-                        <div className="flex justify-between border-b border-slate-700/50 pb-3"><span className="text-slate-400">Used</span><span className="text-slate-200 font-mono">{formatCurrency(Number(funds.utilisedamount))}</span></div>
-                     </div>
+          <div className="p-6 md:p-8 max-w-md mx-auto w-full">
+            {funds ? (
+              <div className="bg-black/30 border border-white/[0.06] rounded-2xl p-5 md:p-6">
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="p-2.5 bg-blue-500/10 rounded-xl text-blue-400"><Wallet className="w-5 h-5" /></div>
+                  <h3 className="text-sm md:text-base font-bold text-white tracking-tight">Available Margin</h3>
+                </div>
+                <div className="text-2xl md:text-3xl font-mono font-bold text-white tabular-nums tracking-tight mb-6">{formatCurrency(Number(funds.net))}</div>
+                <div className="space-y-3 text-xs md:text-sm">
+                  <div className="flex justify-between border-b border-white/[0.04] pb-3">
+                    <span className="text-slate-500">Cash</span>
+                    <span className="text-slate-300 font-mono tabular-nums">{formatCurrency(Number(funds.availablecash))}</span>
                   </div>
-              ) : <div className="text-center text-slate-500 py-10">Loading Funds...</div>}
-           </div>
+                  <div className="flex justify-between border-b border-white/[0.04] pb-3">
+                    <span className="text-slate-500">Used</span>
+                    <span className="text-slate-300 font-mono tabular-nums">{formatCurrency(Number(funds.utilisedamount))}</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center text-slate-600 py-10 text-xs">Loading Funds...</div>
+            )}
+          </div>
         ) : (
-           <>
-             {/* TABLE HEADER */}
-             <div className="overflow-x-auto flex-1">
-               <table className="w-full text-left border-collapse">
-                 <thead>
-                   <tr className="bg-slate-800/50 border-b border-slate-700">
-                     {activeTab === 'HOLDINGS' && (
-                        <>
-                           <SortableHeader label="Symbol" sortKey="symbol" />
-                           <SortableHeader label="Qty" sortKey="qty" align="right" />
-                           <SortableHeader label="Avg Price" sortKey="avg" align="right" />
-                           <SortableHeader label="LTP" sortKey="ltp" align="right" />
-                           <SortableHeader label="Cur. Value" sortKey="value" align="right" />
-                           <SortableHeader label="P&L" sortKey="pnl" align="right" />
-                        </>
-                     )}
-                     {activeTab === 'POSITIONS' && (
-                        <>
-                           <SortableHeader label="Instrument" sortKey="symbol" />
-                           <SortableHeader label="Product" sortKey="product" />
-                           <SortableHeader label="Net Qty" sortKey="qty" align="right" />
-                           <SortableHeader label="Avg Buy" sortKey="avg" align="right" />
-                           <SortableHeader label="LTP" sortKey="ltp" align="right" />
-                           <SortableHeader label="P&L" sortKey="pnl" align="right" />
-                        </>
-                     )}
-                     {activeTab === 'ORDERS' && (
-                        <>
-                           <SortableHeader label="Time" sortKey="time" />
-                           <SortableHeader label="Symbol" sortKey="symbol" />
-                           <SortableHeader label="Type" sortKey="type" />
-                           <SortableHeader label="Qty" sortKey="qty" align="right" />
-                           <SortableHeader label="Price" sortKey="price" align="right" />
-                           <SortableHeader label="Status" sortKey="status" align="right" />
-                        </>
-                     )}
-                   </tr>
-                 </thead>
-                 <tbody className="text-sm divide-y divide-slate-800">
-                   {paginatedData.length === 0 ? (
-                      <tr><td colSpan={6} className="p-8 text-center text-slate-500">No records found matching "{searchQuery}"</td></tr>
-                   ) : (
-                     paginatedData.map((item: any, i) => {
-                       const symbol = item.tradingsymbol;
-                       const qty = item.quantity || item.netqty;
-                       const price = item.averageprice || item.buyavgprice || item.price;
-                       const ltp = item.ltp || 0;
-                       
-                       let pnl = item.pnl ? Number(item.pnl) : 0;
-                       if (activeTab === 'HOLDINGS') {
-                          pnl = (Number(ltp) * Number(qty)) - (Number(price) * Number(qty));
-                       }
-                       const val = Number(qty) * Number(ltp);
+          <>
+            <div className="overflow-x-auto flex-1">
+              <table className="w-full text-left">
+                <thead className="bg-black/30">
+                  <tr>
+                    {activeTab === 'HOLDINGS' && (
+                      <>
+                        <SortableHeader label="Symbol" sortKey="symbol" />
+                        <SortableHeader label="Qty" sortKey="qty" align="right" />
+                        <SortableHeader label="Avg" sortKey="avg" align="right" />
+                        <SortableHeader label="LTP" sortKey="ltp" align="right" />
+                        <SortableHeader label="Value" sortKey="value" align="right" />
+                        <SortableHeader label="P&L" sortKey="pnl" align="right" />
+                      </>
+                    )}
+                    {activeTab === 'POSITIONS' && (
+                      <>
+                        <SortableHeader label="Instrument" sortKey="symbol" />
+                        <SortableHeader label="Product" sortKey="product" />
+                        <SortableHeader label="Net Qty" sortKey="qty" align="right" />
+                        <SortableHeader label="Avg Buy" sortKey="avg" align="right" />
+                        <SortableHeader label="LTP" sortKey="ltp" align="right" />
+                        <SortableHeader label="P&L" sortKey="pnl" align="right" />
+                      </>
+                    )}
+                    {activeTab === 'ORDERS' && (
+                      <>
+                        <SortableHeader label="Time" sortKey="time" />
+                        <SortableHeader label="Symbol" sortKey="symbol" />
+                        <SortableHeader label="Type" sortKey="type" />
+                        <SortableHeader label="Qty" sortKey="qty" align="right" />
+                        <SortableHeader label="Price" sortKey="price" align="right" />
+                        <SortableHeader label="Status" sortKey="status" align="right" />
+                      </>
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/[0.03]">
+                  {paginatedData.length === 0 ? (
+                    <tr><td colSpan={6} className="p-12 text-center text-slate-600 text-xs">No records found{searchQuery ? ` matching "${searchQuery}"` : ''}</td></tr>
+                  ) : (
+                    paginatedData.map((item: any, i) => {
+                      const symbol = item.tradingsymbol;
+                      const qty = item.quantity || item.netqty;
+                      const price = item.averageprice || item.buyavgprice || item.price;
+                      const ltp = item.ltp || 0;
+                      
+                      let pnl = item.pnl ? Number(item.pnl) : 0;
+                      if (activeTab === 'HOLDINGS') {
+                        pnl = (Number(ltp) * Number(qty)) - (Number(price) * Number(qty));
+                      }
+                      const val = Number(qty) * Number(ltp);
 
-                       return (
-                         <tr key={i} className="hover:bg-slate-800/30 transition-colors">
-                           {activeTab === 'HOLDINGS' && (
-                              <>
-                                <td className="p-4 font-bold text-white">{symbol} <span className="ml-1 text-[10px] text-slate-500">EQ</span></td>
-                                <td className="p-4 text-right text-slate-300">{qty}</td>
-                                <td className="p-4 text-right text-slate-400">{Number(price).toFixed(2)}</td>
-                                <td className="p-4 text-right text-white font-mono">{Number(ltp).toFixed(2)}</td>
-                                <td className="p-4 text-right text-slate-300">{formatCurrency(val)}</td>
-                                <td className="p-4 text-right"><PnlBadge value={pnl} /></td>
-                              </>
-                           )}
-                           {activeTab === 'POSITIONS' && (
-                              <>
-                                <td className="p-4 font-bold text-white">{symbol}</td>
-                                <td className="p-4"><span className="px-2 py-0.5 bg-slate-800 rounded text-[10px] text-slate-300 uppercase">{item.producttype}</span></td>
-                                <td className={`p-4 text-right font-bold ${Number(qty) > 0 ? 'text-blue-400' : Number(qty) < 0 ? 'text-rose-400' : 'text-slate-500'}`}>{qty}</td>
-                                <td className="p-4 text-right text-slate-400">{Number(price).toFixed(2)}</td>
-                                <td className="p-4 text-right text-white">{Number(ltp).toFixed(2)}</td>
-                                <td className="p-4 text-right"><PnlBadge value={pnl} /></td>
-                              </>
-                           )}
-                           {activeTab === 'ORDERS' && (
-                              <>
-                                <td className="p-4 text-slate-500 text-xs">{item.updatetime?.split(' ')[1]}</td>
-                                <td className="p-4 font-bold text-white">{symbol}</td>
-                                <td className="p-4"><span className={`text-xs font-bold px-2 py-1 rounded ${item.transactiontype === 'BUY' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>{item.transactiontype}</span></td>
-                                <td className="p-4 text-right text-slate-300">{qty}</td>
-                                <td className="p-4 text-right text-slate-300">{price === 0 ? 'MKT' : price}</td>
-                                <td className="p-4 text-right"><span className={`text-xs font-bold uppercase ${item.status === 'complete' ? 'text-emerald-500' : item.status === 'rejected' ? 'text-rose-500' : 'text-amber-500'}`}>{item.status}</span></td>
-                              </>
-                           )}
-                         </tr>
-                       );
-                     })
-                   )}
-                 </tbody>
-               </table>
-             </div>
+                      return (
+                        <tr key={i} className="hover:bg-white/[0.015] transition-colors">
+                          {activeTab === 'HOLDINGS' && (
+                            <>
+                              <td className="p-3 md:p-4">
+                                <span className="text-xs md:text-sm font-bold text-white tracking-tight">{symbol}</span>
+                                <span className="ml-1 text-[8px] md:text-[9px] text-slate-600">EQ</span>
+                              </td>
+                              <td className="p-3 md:p-4 text-right text-[10px] md:text-xs font-mono text-slate-400 tabular-nums">{qty}</td>
+                              <td className="p-3 md:p-4 text-right text-[10px] md:text-xs font-mono text-slate-500 tabular-nums tracking-tight">{Number(price).toFixed(2)}</td>
+                              <td className="p-3 md:p-4 text-right text-[10px] md:text-xs font-mono text-white tabular-nums tracking-tight">{Number(ltp).toFixed(2)}</td>
+                              <td className="p-3 md:p-4 text-right text-[10px] md:text-xs font-mono text-slate-300 tabular-nums tracking-tight hidden sm:table-cell">{formatCurrency(val)}</td>
+                              <td className="p-3 md:p-4 text-right"><PnlBadge value={pnl} /></td>
+                            </>
+                          )}
+                          {activeTab === 'POSITIONS' && (
+                            <>
+                              <td className="p-3 md:p-4 text-xs md:text-sm font-bold text-white tracking-tight">{symbol}</td>
+                              <td className="p-3 md:p-4">
+                                <span className="bg-white/[0.04] text-slate-400 px-1.5 py-0.5 rounded text-[8px] md:text-[9px] font-medium uppercase">{item.producttype}</span>
+                              </td>
+                              <td className={`p-3 md:p-4 text-right text-[10px] md:text-xs font-mono font-semibold tabular-nums ${Number(qty) > 0 ? 'text-blue-400' : Number(qty) < 0 ? 'text-rose-400' : 'text-slate-600'}`}>{qty}</td>
+                              <td className="p-3 md:p-4 text-right text-[10px] md:text-xs font-mono text-slate-500 tabular-nums tracking-tight">{Number(price).toFixed(2)}</td>
+                              <td className="p-3 md:p-4 text-right text-[10px] md:text-xs font-mono text-white tabular-nums tracking-tight">{Number(ltp).toFixed(2)}</td>
+                              <td className="p-3 md:p-4 text-right"><PnlBadge value={pnl} /></td>
+                            </>
+                          )}
+                          {activeTab === 'ORDERS' && (
+                            <>
+                              <td className="p-3 md:p-4 text-[10px] md:text-xs text-slate-500 font-mono tabular-nums">{item.updatetime?.split(' ')[1]}</td>
+                              <td className="p-3 md:p-4 text-xs md:text-sm font-bold text-white tracking-tight">{symbol}</td>
+                              <td className="p-3 md:p-4">
+                                <span className={`text-[8px] md:text-[9px] font-semibold px-1.5 py-0.5 rounded-full uppercase ${
+                                  item.transactiontype === 'BUY' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                                }`}>{item.transactiontype}</span>
+                              </td>
+                              <td className="p-3 md:p-4 text-right text-[10px] md:text-xs font-mono text-slate-400 tabular-nums">{qty}</td>
+                              <td className="p-3 md:p-4 text-right text-[10px] md:text-xs font-mono text-slate-300 tabular-nums tracking-tight">{price === 0 ? 'MKT' : price}</td>
+                              <td className="p-3 md:p-4 text-right">
+                                <span className={`text-[8px] md:text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded-full ${
+                                  item.status === 'complete' ? 'bg-emerald-500/10 text-emerald-400' 
+                                  : item.status === 'rejected' ? 'bg-rose-500/10 text-rose-400' 
+                                  : 'bg-amber-500/10 text-amber-400'
+                                }`}>{item.status}</span>
+                              </td>
+                            </>
+                          )}
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-             {/* PAGINATION FOOTER */}
-             {totalPages > 1 && (
-               <div className="flex justify-between items-center p-4 border-t border-slate-800 bg-slate-900/30">
-                  <div className="text-xs text-slate-500">
-                     Page {currentPage} of {totalPages}
-                  </div>
-                  <div className="flex gap-2">
-                     <button 
-                       disabled={currentPage === 1}
-                       onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                       className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-400 hover:text-white"
-                     >
-                       <ChevronLeft className="w-4 h-4" />
-                     </button>
-                     <button 
-                       disabled={currentPage === totalPages}
-                       onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                       className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-400 hover:text-white"
-                     >
-                       <ChevronRight className="w-4 h-4" />
-                     </button>
-                  </div>
-               </div>
-             )}
-           </>
+            {/* ━━━ PAGINATION ━━━ */}
+            {totalPages > 1 && (
+              <div className="border-t border-white/[0.04] p-2.5 md:p-3 flex justify-between items-center">
+                <span className="text-[10px] md:text-xs text-slate-600 tabular-nums">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <div className="flex gap-1">
+                  <button 
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    className="p-1.5 rounded-lg hover:bg-white/[0.04] disabled:opacity-30 text-slate-500"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button 
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    className="p-1.5 rounded-lg hover:bg-white/[0.04] disabled:opacity-30 text-slate-500"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

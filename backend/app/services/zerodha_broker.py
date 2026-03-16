@@ -16,6 +16,7 @@ from app.constants import BrokerName, Exchange, OrderSide, OrderType
 from app.exceptions import BrokerConnectionError
 from app.services.broker_interface import (
     BrokerInterface,
+    FundsData,
     Holding,
     OrderRequest,
     OrderResponse,
@@ -449,6 +450,34 @@ class ZerodhaBroker(BrokerInterface):
             raise BrokerConnectionError(
                 broker="Zerodha",
                 detail=f"Modify failed: {exc}",
+            )
+
+    # ━━━━━━━━━━━━━━━ Funds / Margin ━━━━━━━━━━━━━━━
+
+    async def get_funds(self) -> FundsData:
+        """Fetch real account funds from Zerodha Kite margins API.
+
+        Returns:
+            FundsData with account values from Kite Connect.
+        """
+        self._ensure_connected()
+
+        try:
+            margins = self._kite.margins(segment="equity")
+            available = float(margins.get("available", {}).get("live_balance", 0) or 0)
+            used = float(margins.get("utilised", {}).get("debits", 0) or 0)
+            net = float(margins.get("net", 0) or 0)
+            if net == 0:
+                net = available + used
+
+            logger.info("Zerodha Funds — Net: ₹%.2f, Available: ₹%.2f, Used: ₹%.2f", net, available, used)
+            return FundsData(available_cash=available, used_margin=used, total_balance=net)
+
+        except Exception as exc:
+            logger.error("Zerodha margins fetch failed: %s", exc)
+            raise BrokerConnectionError(
+                broker="Zerodha",
+                detail=f"Failed to fetch funds: {exc}",
             )
 
     # ━━━━━━━━━━━━━━━ Private Helpers ━━━━━━━━━━━━━━━

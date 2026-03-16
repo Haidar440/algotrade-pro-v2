@@ -245,16 +245,14 @@ export class AngelOne {
         } catch (e) { return []; }
     }
 
-    // ✅ Funds (Risk Status/Limits from backend)
+    // ✅ Funds (Real broker account funds via Angel One RMS API)
     async getFunds(): Promise<AngelFundDetails | null> {
         try {
-            const res: any = await secureGet('/broker/risk/status');
-            const maxValue = res.max_order_value || 100000;
-            const dailyLossUsed = maxValue - (res.daily_loss_remaining || maxValue);
+            const res: any = await secureGet('/broker/funds');
             return {
-                net: String(maxValue),
-                availablecash: String(res.daily_loss_remaining || maxValue),
-                marginused: String(dailyLossUsed)
+                net: String(res.total_balance || 0),
+                availablecash: String(res.available_cash || 0),
+                marginused: String(res.used_margin || 0)
             };
         } catch (e) { return null; }
     }

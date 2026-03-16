@@ -51,14 +51,20 @@ const AutoTraderDashboard: React.FC<Props> = ({ brokerState, existingTrader }) =
   }, [existingTrader]);
 
   // --- 2. POLLING ENGINE ---
+  // Uses refs to avoid re-creating interval when activeTrades/config change
+  const activeTradesRef = useRef(activeTrades);
+  const configRef = useRef(config);
+  useEffect(() => { activeTradesRef.current = activeTrades; }, [activeTrades]);
+  useEffect(() => { configRef.current = config; }, [config]);
+
   useEffect(() => {
     if (!isRunning || !existingTrader || !brokerState.angel) return;
     const angel = new AngelOne(brokerState.angel);
     
     const intervalId = setInterval(async () => {
         const symbolsToPoll = new Set([
-            ...config.symbols, 
-            ...activeTrades.map(t => t.symbol)
+            ...configRef.current.symbols, 
+            ...activeTradesRef.current.map(t => t.symbol)
         ]);
 
         for (const sym of symbolsToPoll) {
@@ -75,7 +81,7 @@ const AutoTraderDashboard: React.FC<Props> = ({ brokerState, existingTrader }) =
     }, 3000); 
 
     return () => clearInterval(intervalId);
-  }, [isRunning, config.symbols, activeTrades]);
+  }, [isRunning, brokerState.angel]);
 
   // --- 3. ACTIONS ---
   // ✅ Simplified: Just tell the bot to run the scanner

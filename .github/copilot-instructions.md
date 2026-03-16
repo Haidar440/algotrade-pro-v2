@@ -1,31 +1,29 @@
 # AlgoTrade Pro — Copilot Instructions
 
 > Auto-loaded by GitHub Copilot in every conversation.
-> Source: Migrated from Antigravity IDE (Gemini + Claude Agent) sessions.
 
 ---
 
 ## Project Overview
 
-AlgoTrade Pro is a **production-grade algorithmic trading platform** for Indian stock markets (NSE/BSE).  
-Originally built in TypeScript/Express — now being **incrementally migrated to Python/FastAPI**.
+AlgoTrade Pro is a **production-grade algorithmic trading platform** for Indian stock markets (NSE/BSE).
+Python/FastAPI backend (port 8000) + React/TypeScript frontend (Vite, port 5173).
 
 ---
 
-## Tech Stack (Confirmed)
+## Tech Stack
 
-| Layer                  | Technology                                                   |
-| ---------------------- | ------------------------------------------------------------ |
-| **Backend**            | FastAPI (Python 3.11+)                                       |
-| **Frontend**           | React + TypeScript (Vite) — keeping existing 31 components   |
-| **Database**           | PostgreSQL (async via asyncpg + SQLAlchemy 2.0)              |
-| **AI/ML**              | LangChain + Google Gemini + Tavily Search                    |
-| **Brokers**            | Angel One (smartapi-python) + Zerodha (kiteconnect)          |
-| **Auth**               | JWT (python-jose) + bcrypt + Fernet AES-256 credential vault |
-| **Technical Analysis** | pandas-ta (130+ indicators)                                  |
-| **Backtesting**        | backtesting.py (interactive HTML charts)                     |
-| **Notifications**      | Telegram Bot (python-telegram-bot)                           |
-| **Server**             | Uvicorn (ASGI)                                               |
+| Layer             | Technology                                                     |
+| ----------------- | -------------------------------------------------------------- |
+| **Backend**       | FastAPI, Python 3.13, Uvicorn (ASGI)                           |
+| **Frontend**      | React 18 + TypeScript (Vite), 37 components, 14 services       |
+| **Database**      | PostgreSQL (async via asyncpg + SQLAlchemy 2.0)                |
+| **AI/ML**         | LangChain + Google Gemini 2.0 Flash + Gemini Search Grounding  |
+| **Broker**        | Angel One (smartapi-python), Zerodha (kiteconnect)             |
+| **Real-time**     | SmartWebSocketV2 → FastAPI WS `/ws/prices` → browser native WS |
+| **Auth**          | JWT (python-jose) + bcrypt + Fernet AES-256 credential vault   |
+| **Analysis**      | pandas-ta (130+ indicators), backtesting.py                    |
+| **Notifications** | Telegram Bot (python-telegram-bot)                             |
 
 ---
 
@@ -33,61 +31,129 @@ Originally built in TypeScript/Express — now being **incrementally migrated to
 
 ```
 algotrade-pro/
-├── backend/                    # Python FastAPI (NEW)
+├── backend/
 │   ├── app/
-│   │   ├── main.py             # FastAPI entry point
-│   │   ├── config.py           # Pydantic Settings (ONLY env reader)
-│   │   ├── constants.py        # 13 Enums (zero magic strings)
-│   │   ├── exceptions.py       # 10 custom exceptions
-│   │   ├── logging_config.py   # 4 log handlers
-│   │   ├── database.py         # Async PostgreSQL (SQLAlchemy 2.0)
-│   │   ├── middleware.py       # CORS, request ID, error handler, timing
-│   │   ├── dependencies.py     # DI container
-│   │   ├── models/             # SQLAlchemy ORM + Pydantic schemas
-│   │   ├── routers/            # 7 routers (health, auth, trades, watchlists, broker, ai, backtest)
-│   │   ├── security/           # vault.py (AES-256), auth.py (JWT)
-│   │   ├── services/           # 14 services (broker, AI, backtest)
-│   │   └── strategies/         # 6 backtesting strategies
-│   ├── scripts/                # scan_hardcoded_secrets.py, verify_health.py
-│   ├── .env                    # Secrets (NOT in git)
-│   ├── .env.example            # Template (in git)
-│   ├── requirements.txt
-│   └── run.py                  # Uvicorn runner
-├── components/                 # React components (31 files)
-├── services/                   # React services (TypeScript)
-├── App.tsx                     # React app root
-└── package.json                # Frontend deps
+│   │   ├── main.py                 # FastAPI entry, lifespan, 9 routers
+│   │   ├── config.py               # Pydantic Settings — ONLY env reader
+│   │   ├── constants.py            # 13 Enums (zero magic strings)
+│   │   ├── database.py             # Async engine + get_db dependency
+│   │   ├── models/                 # ORM (base, trade, user, watchlist, instrument, audit)
+│   │   │   └── schemas.py          # Pydantic request/response schemas
+│   │   ├── routers/                # 9 routers: health auth trades watchlists broker ai backtest telegram websocket
+│   │   ├── security/               # vault.py (AES-256), auth.py (JWT)
+│   │   ├── services/               # 20 services (broker, AI, backtest, WS, screener)
+│   │   └── strategies/             # 6 backtesting strategies
+│   ├── scripts/                    # Migration, seed, test, verify scripts
+│   ├── .env                        # Secrets (gitignored)
+│   └── run.py                      # uvicorn.run(reload=True, port=8000)
+├── components/                     # React components (37 files)
+├── services/                       # React services (14 files)
+├── types.ts                        # Shared TypeScript interfaces
+├── App.tsx                         # React root
+└── package.json                    # npm run dev → Vite
 ```
 
 ---
 
-## Coding Standards (MANDATORY)
+## Developer Commands
 
-1. **DRY**: No duplicated logic. Use base classes, shared utils.
-2. **SOLID**: Each file/class does ONE thing.
-3. **Zero Hardcoding**: ALL secrets via `app/config.py` Settings class. **NO `os.getenv()` anywhere else.**
-4. **Type Safety**: All functions have type hints. All API schemas use Pydantic.
-5. **Constants**: Use Enums from `constants.py` — zero magic strings.
-6. **Exceptions**: Use custom exceptions from `exceptions.py` with proper HTTP codes.
-7. **Security**: JWT on every route via `Depends(get_current_user)`. Rate limiting on auth.
-8. **Naming**: `snake_case` for Python, `camelCase` for TypeScript/React.
-9. **Documentation**: Docstrings on every class and public method.
-10. **Testing**: Write testable, modular code. No side effects in constructors.
-11. **Async**: All database operations must be async (`async def`, `await`).
-12. **Base Model**: All ORM models inherit from `base.py` (auto `id`, `created_at`, `updated_at`).
-13. **Audit**: All sensitive actions logged to append-only `audit_logs` table.
+```bash
+# Backend (from backend/)
+python run.py                                         # Start API (auto-reload)
+python scripts/seed_admin.py                          # Create admin user (admin/admin1234)
+python scripts/seed_instruments.py                    # Load Angel One instrument master
+python scripts/migrate_add_trade_columns.py           # Add new DB columns
+python scripts/scan_hardcoded_secrets.py              # Pre-commit secret scanner
+
+# Frontend (from root)
+npm run dev                                           # Vite dev server (port 5173)
+```
 
 ---
 
-## Security Rules
+## Critical Data Flow Patterns
 
-- NEVER hardcode API keys, passwords, tokens, or secrets in code
-- ALL env vars read ONLY through `app/config.py` Settings class
-- ALL API routes require JWT auth (except `/api/health`, `/api/auth/login`, `/api/auth/register`, and `/api/telegram/webhook`)
-- Broker credentials encrypted with Fernet AES-256 via `security/vault.py`
-- Rate limiting on login: 5 requests/minute
-- Pre-commit scanner: `scripts/scan_hardcoded_secrets.py` (11 regex patterns)
-- `.env` is gitignored. `.env.example` is committed (no values).
+### Trade Lifecycle (Paper Trading)
+
+`PaperTradingDashboard` buy form → `DB_SERVICE.saveTrade()` → `POST /api/trades` → PostgreSQL.
+
+- **Trade.type** = `SWING` or `INTRADAY` (from `TradeType` enum — never `PAPER`)
+- **Trade.source** = `PAPER`, `MANUAL`, or `AUTO` (from `TradeSource` enum)
+- Frontend filters paper trades by `source === 'PAPER'`, NOT `type`
+
+### Frontend → Backend Communication
+
+- `services/api.ts`: `secureGet/securePost/securePut/secureDelete` with JWT from `localStorage`
+- `services/db.ts`: `DB_SERVICE` — maps camelCase↔snake_case for trades, watchlists, search
+- JWT stored at `localStorage.algoTradePro_jwt`, cleared on 401 via `auth:logout` event
+
+### Symbol Token Resolution (Angel One)
+
+`angel_broker.py._resolve_token()`: 2-tier — instrument DB first → Angel API fallback.
+Always use `-EQ` suffix for NSE equities (e.g., `RELIANCE-EQ`).
+
+### Real-time Price Streaming
+
+```
+Browser WebSocket → FastAPI /ws/prices → WebSocketManager → SmartWebSocketV2 (Angel One)
+```
+
+- `services/streaming.ts`: native WebSocket client, auto-reconnect, multiple callbacks per token
+- `backend/app/services/websocket_manager.py`: singleton `ws_manager`, runs upstream in daemon thread
+- REST controls: `POST /api/ws/start`, `POST /api/ws/subscribe`, `GET /api/ws/status`
+
+---
+
+## Coding Conventions
+
+1. **Config**: ALL env vars via `app/config.py` Settings class. **No `os.getenv()` anywhere else.**
+2. **Constants**: Use Enums from `constants.py` — zero magic strings.
+3. **Exceptions**: Custom exceptions from `exceptions.py` with HTTP codes.
+4. **Auth**: JWT on every route via `Depends(get_current_user)`. Exceptions: `/api/health`, `/api/auth/login`, `/api/auth/register`, `/api/telegram/webhook`, `/ws/prices`.
+5. **Async**: All DB operations use `async def` + `await`. Engine is `create_async_engine`.
+6. **ORM**: All models inherit `base.py` (auto `id`, `created_at`, `updated_at`).
+7. **Schemas**: Separate `TradeCreate` (input) / `TradeResponse` (output) — never expose internal fields.
+8. **Naming**: `snake_case` Python, `camelCase` TypeScript. `db.ts` handles the mapping.
+9. **Docstrings**: Every class and public method needs a docstring.
+10. **Security**: Broker credentials encrypted via `security/vault.py` (Fernet AES-256).
+
+---
+
+## Key Backend Services
+
+| Service                | Purpose                                              |
+| ---------------------- | ---------------------------------------------------- |
+| `angel_broker.py`      | Angel One SDK wrapper + `_resolve_token()` DB lookup |
+| `websocket_manager.py` | SmartWebSocketV2 upstream + broadcast to frontend WS |
+| `technical.py`         | 15+ indicators, mean-reversion-aware signal scoring  |
+| `gemini_news.py`       | Gemini + Google Search grounding (replaced Tavily)   |
+| `stock_picker.py`      | 10-layer scoring (100 pts) + swing screener          |
+| `backtest_engine.py`   | backtesting.py wrapper, 0.2% costs, HTML reports     |
+| `data_provider.py`     | Multi-tier: Angel One → yfinance → demo data         |
+| `risk_manager.py`      | 6 pre-trade checks, ₹1L max order, kill switch       |
+
+---
+
+## Key Frontend Services
+
+| Service                | Purpose                                            |
+| ---------------------- | -------------------------------------------------- |
+| `api.ts`               | `secureGet/Post/Put/Delete` with JWT, 401 handling |
+| `db.ts`                | `DB_SERVICE` — CRUD for trades/watchlists, search  |
+| `angel.ts`             | Angel One client-side SDK wrapper                  |
+| `streaming.ts`         | Native WebSocket client for live tick data         |
+| `technicalAnalysis.ts` | 17 client-side strategies, BUY/SELL signal engine  |
+| `gemini.ts`            | Gemini API for AI analysis + market indices        |
+
+---
+
+## Gotchas & Resolved Issues
+
+- PostgreSQL password with `@` → must URL-encode as `%40` in `DATABASE_URL`
+- `create_all()` only creates tables, not new columns → use migration scripts
+- SmartAPI SDK has poor type stubs → Pylance warnings in `angel_broker.py` are expected
+- `PaperTradingDashboard` polls every 15s only when `isVisible` prop is true
+- Frontend auto-reconnects backend broker on mount (in-memory session lost on restart)
 
 ---
 
@@ -99,120 +165,3 @@ algotrade-pro/
 | MAX_DAILY_LOSS            | ₹5,000    |
 | MAX_POSITIONS             | 10        |
 | MAX_POSITION_SIZE_PERCENT | 20%       |
-
----
-
-## Sprint Status
-
-| Sprint         | Scope                                                                 | Status         |
-| -------------- | --------------------------------------------------------------------- | -------------- |
-| **Sprint 1**   | Foundation: FastAPI + PostgreSQL + Auth + CRUD (24 files)             | ✅ COMPLETE    |
-| **Sprint 2**   | Broker Integration: Angel One + Zerodha + Paper Trader + Risk Manager | ✅ COMPLETE    |
-| **Sprint 3**   | AI Engine: LangChain + Gemini + Tavily + Smart Stock Picker (7 files) | ✅ COMPLETE    |
-| **Sprint 4**   | Backtesting: Engine + 6 strategies + Optimization                     | ✅ COMPLETE    |
-| **Sprint 5**   | Frontend: Connect React + Telegram Bot (35 components, 14 services)   | ✅ COMPLETE    |
-| **Sprint 5.5** | DB Auth: User model + seed_admin + register endpoint                  | ✅ COMPLETE    |
-| **Sprint 6**   | Advanced: 6 AI Agents + ML Prediction + Real-time WebSocket           | ❌ NOT STARTED |
-
----
-
-## Sprint 2 Files (Broker Integration)
-
-| File                               | Purpose                                                       |
-| ---------------------------------- | ------------------------------------------------------------- |
-| `app/services/__init__.py`         | Package init                                                  |
-| `app/services/broker_interface.py` | ABC + OrderRequest/OrderResponse/Position/Holding dataclasses |
-| `app/services/angel_broker.py`     | Angel One via smartapi-python                                 |
-| `app/services/zerodha_broker.py`   | Zerodha via kiteconnect                                       |
-| `app/services/paper_trader.py`     | Virtual trading with ₹1,00,000 + hard wall assertion          |
-| `app/services/risk_manager.py`     | 6 pre-trade safety checks + kill switch                       |
-| `app/services/broker_factory.py`   | `create_broker()` factory function                            |
-| `app/routers/broker.py`            | 13 REST endpoints for broker operations                       |
-
----
-
-## Known Issues (from Sprint 1)
-
-1. SQLAlchemy required `__allow_unmapped__ = True` fix on base model
-2. `.env` had Unicode box-drawing characters causing parse errors (fixed)
-3. PostgreSQL password contains `@` — needs URL encoding (`%40`) in DATABASE_URL
-4. Old Node.js backend files still exist in `backend/` (server.js, db.js, etc.) — need cleanup
-
----
-
-## Documentation Rule
-
-**Every time a file is created, updated, or deleted — update `docs/PROJECT_RECORD.md`.**
-That file is the master record of every file in the project, what it does, and the full changelog.
-
----
-
-## Sprint 3 Files (AI & Analysis Engine)
-
-| File                            | Purpose                                                   |
-| ------------------------------- | --------------------------------------------------------- |
-| `app/services/technical.py`     | TechnicalAnalyzer — 15+ indicators via pandas-ta          |
-| `app/services/ai_engine.py`     | AIEngine — LangChain + Gemini 2.0 Flash                   |
-| `app/services/tavily_search.py` | TavilySearchService — real-time market news               |
-| `app/services/stock_picker.py`  | StockPicker — 10-layer scoring (100 pts)                  |
-| `app/services/analytics.py`     | PerformanceAnalytics — Sharpe, drawdown, win rate         |
-| `app/routers/ai.py`             | 5 AI endpoints (analyze, predict, news, picks, analytics) |
-| `scripts/test_sprint3.py`       | 42-point Sprint 3 test suite                              |
-
----
-
-## Sprint 4 Files (Backtesting Engine)
-
-| File                                | Purpose                                  |
-| ----------------------------------- | ---------------------------------------- |
-| `app/services/data_provider.py`     | Multi-tier data: Angel → yfinance → demo |
-| `app/services/backtest_engine.py`   | BacktestEngine — 0.2% costs, HTML charts |
-| `app/strategies/__init__.py`        | Lazy strategy registry                   |
-| `app/strategies/base.py`            | StrategyBase — metadata + optimization   |
-| `app/strategies/supertrend_rsi.py`  | Supertrend + RSI filter (55-60%)         |
-| `app/strategies/vwap_orb.py`        | VWAP ORB breakout (60-70%)               |
-| `app/strategies/ema_adx.py`         | EMA 9/21 + ADX trend filter (55-60%)     |
-| `app/strategies/rsi_macd.py`        | RSI + MACD confirmation (65-73%)         |
-| `app/strategies/vcp_breakout.py`    | VCP Minervini method (55-65%)            |
-| `app/strategies/volume_breakout.py` | Volume spike breakout (52-58%)           |
-| `app/routers/backtest.py`           | 3 endpoints (strategies, run, optimize)  |
-| `scripts/verify_sprint4.py`         | 6-step backtesting verification          |
-
----
-
-## Sprint 5 Files (Frontend + Telegram)
-
-| File                                 | Purpose                                              |
-| ------------------------------------ | ---------------------------------------------------- |
-| `app/services/telegram_bot.py`       | Telegram Bot — send_message, webhook, /start /status |
-| `app/routers/telegram.py`            | 3 endpoints (webhook, send, status)                  |
-| `services/api.ts`                    | Axios client → FastAPI:8000, JWT interceptor         |
-| `services/db.ts`                     | DB_SERVICE wrapping FastAPI CRUD endpoints           |
-| `services/autoTrader.ts`             | Auto-trading service via FastAPI                     |
-| `services/tvDatafeed.ts`             | TradingView data feed service                        |
-| `services/fnoUniverse.ts`            | F&O universe stock list                              |
-| `services/stockSelection.ts`         | Stock selection algorithms                           |
-| `components/AuthContext.tsx`         | React auth context, JWT in localStorage              |
-| `components/LoginScreen.tsx`         | Login UI                                             |
-| `components/RegisterScreen.tsx`      | Registration UI                                      |
-| `components/Dashboard.tsx`           | Main dashboard layout                                |
-| `components/AutoTraderDashboard.tsx` | Auto-trading controls                                |
-| `components/ExecutionDashboard.tsx`  | Execution monitoring                                 |
-| `components/TradeHistory.tsx`        | Trade history viewer                                 |
-| `components/WatchlistManager.tsx`    | Watchlist CRUD UI                                    |
-| `components/AddStockModal.tsx`       | Add stock modal dialog                               |
-| `components/OrderEntryPanel.tsx`     | Order entry form                                     |
-| `components/RealPortfolio.tsx`       | Real portfolio view                                  |
-| `components/TradeModal.tsx`          | Trade execution modal                                |
-| `components/TradingChart.tsx`        | Interactive trading chart                            |
-| `components/TradingViewTicker.tsx`   | TradingView ticker widget                            |
-| `components/TVChartContainer.tsx`    | TradingView chart container                          |
-
----
-
-## Sprint 5.5 Files (DB Auth)
-
-| File                    | Purpose                                               |
-| ----------------------- | ----------------------------------------------------- |
-| `app/models/user.py`    | User ORM model (username, hashed_password, is_active) |
-| `scripts/seed_admin.py` | Seeds admin user (admin / admin1234)                  |

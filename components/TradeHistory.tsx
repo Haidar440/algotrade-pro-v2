@@ -10,9 +10,10 @@ import {
 
 interface Props {
   brokerState: BrokerState;
+  isVisible?: boolean;
 }
 
-const TradeHistory: React.FC<Props> = ({ brokerState }) => {
+const TradeHistory: React.FC<Props> = ({ brokerState, isVisible = true }) => {
   const [activeTab, setActiveTab] = useState<'PAPER' | 'REAL'>('PAPER');
   const [trades, setTrades] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,11 +42,12 @@ const TradeHistory: React.FC<Props> = ({ brokerState }) => {
   };
 
   useEffect(() => {
-    fetchHistory();
-  }, []);
+    if (isVisible) fetchHistory();
+  }, [isVisible]);
 
   // --- Calculate P&L Stats (Realized + Unrealized) ---
   useEffect(() => {
+    if (!isVisible) return; // Don't run expensive API calls when hidden
     const calculatePnL = async () => {
         setCalculatingStats(true);
         
@@ -168,201 +170,240 @@ const TradeHistory: React.FC<Props> = ({ brokerState }) => {
   };
 
   const SortIcon = ({ column }: { column: string }) => {
-      if (sortConfig?.key !== column) return <ArrowUpDown className="w-3 h-3 text-slate-600" />;
+      if (sortConfig?.key !== column) return <ArrowUpDown className="w-3 h-3 text-slate-700" />;
       return sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 text-blue-400" /> : <ArrowDown className="w-3 h-3 text-blue-400" />;
   };
 
+  const formatPnL = (value: number) => {
+    const prefix = value > 0 ? '+' : '';
+    return `${prefix}₹${Math.abs(value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="space-y-4 md:space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
-      {/* HEADER & TABS */}
-      <div className="flex flex-col md:flex-row justify-between items-end gap-4">
-         <div>
-            <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-               <Calendar className="w-6 h-6 text-blue-400" /> Trade Ledger
-            </h2>
-            <p className="text-slate-400 text-sm mt-1">Complete history of your executions.</p>
-         </div>
+      {/* ━━━ HEADER & TABS ━━━ */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3">
+        <div>
+          <h2 className="text-lg md:text-xl font-bold text-white flex items-center gap-2 tracking-tight">
+            <Calendar className="w-5 h-5 text-blue-400" /> Trade Ledger
+          </h2>
+          <p className="text-slate-500 text-[10px] md:text-xs mt-0.5">Complete history of your executions</p>
+        </div>
 
-         <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800">
-            <button onClick={() => { setActiveTab('PAPER'); setCurrentPage(1); }} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'PAPER' ? 'bg-slate-700 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}>
-                <FileText className="w-4 h-4" /> Paper
-            </button>
-            <button onClick={() => { setActiveTab('REAL'); setCurrentPage(1); }} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'REAL' ? 'bg-emerald-600 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}>
-                <Zap className="w-4 h-4" /> Real
-            </button>
-         </div>
+        <div className="flex bg-black/30 p-0.5 rounded-lg border border-white/[0.06]">
+          <button
+            onClick={() => { setActiveTab('PAPER'); setCurrentPage(1); }}
+            className={`flex items-center gap-1.5 px-3 md:px-4 py-1.5 md:py-2 rounded-md text-[10px] md:text-xs font-semibold transition-all ${
+              activeTab === 'PAPER' ? 'bg-white/[0.08] text-white' : 'text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" /> Paper
+          </button>
+          <button
+            onClick={() => { setActiveTab('REAL'); setCurrentPage(1); }}
+            className={`flex items-center gap-1.5 px-3 md:px-4 py-1.5 md:py-2 rounded-md text-[10px] md:text-xs font-semibold transition-all ${
+              activeTab === 'REAL' ? 'bg-emerald-600 text-white' : 'text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            <Zap className="w-3.5 h-3.5" /> Real
+          </button>
+        </div>
       </div>
 
-      {/* ✅ P&L SUMMARY CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col relative overflow-hidden">
-              <div className="text-xs text-slate-500 uppercase font-bold mb-1">Realized P&L</div>
-              <div className={`text-2xl font-mono font-bold ${stats.realized >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {stats.realized >= 0 ? '+' : ''}₹{stats.realized.toFixed(2)}
-              </div>
-              <div className="absolute right-4 top-4 opacity-10">
-                  <DollarSign className="w-12 h-12 text-slate-400" />
-              </div>
+      {/* ━━━ P&L SUMMARY CARDS ━━━ */}
+      <div className="grid grid-cols-3 gap-2 md:gap-4">
+        <div className="bg-[#0c1120] border border-white/[0.04] p-3 md:p-4 rounded-xl relative overflow-hidden">
+          <div className="text-[9px] md:text-[10px] text-slate-500 uppercase font-semibold tracking-wider mb-1">Realized</div>
+          <div className={`text-sm md:text-xl font-mono font-bold tabular-nums tracking-tight ${stats.realized >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+            {formatPnL(stats.realized)}
           </div>
+          <DollarSign className="absolute right-3 top-3 w-8 h-8 md:w-10 md:h-10 text-slate-800/40" />
+        </div>
 
-          <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col relative overflow-hidden">
-              <div className="text-xs text-slate-500 uppercase font-bold mb-1">Unrealized P&L</div>
-              <div className={`text-2xl font-mono font-bold ${stats.unrealized >= 0 ? 'text-blue-400' : 'text-amber-400'}`}>
-                  {calculatingStats ? (
-                      <span className="text-sm text-slate-500 animate-pulse">Calculating...</span>
-                  ) : (
-                      <>
-                        {stats.unrealized >= 0 ? '+' : ''}₹{stats.unrealized.toFixed(2)}
-                      </>
-                  )}
-              </div>
-              <div className="absolute right-4 top-4 opacity-10">
-                  <TrendingUp className="w-12 h-12 text-blue-400" />
-              </div>
+        <div className="bg-[#0c1120] border border-white/[0.04] p-3 md:p-4 rounded-xl relative overflow-hidden">
+          <div className="text-[9px] md:text-[10px] text-slate-500 uppercase font-semibold tracking-wider mb-1">Unrealized</div>
+          <div className={`text-sm md:text-xl font-mono font-bold tabular-nums tracking-tight ${stats.unrealized >= 0 ? 'text-blue-400' : 'text-amber-400'}`}>
+            {calculatingStats ? (
+              <span className="text-[10px] md:text-xs text-slate-600 animate-pulse">Calculating...</span>
+            ) : (
+              formatPnL(stats.unrealized)
+            )}
           </div>
+          <TrendingUp className="absolute right-3 top-3 w-8 h-8 md:w-10 md:h-10 text-slate-800/40" />
+        </div>
 
-          <div className={`border p-4 rounded-xl flex flex-col relative overflow-hidden ${stats.total >= 0 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-rose-500/10 border-rose-500/30'}`}>
-              <div className={`text-xs uppercase font-bold mb-1 ${stats.total >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>Total Net P&L</div>
-              <div className={`text-2xl font-mono font-bold ${stats.total >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {stats.total >= 0 ? '+' : ''}₹{stats.total.toFixed(2)}
-              </div>
-              <div className="absolute right-4 top-4 opacity-20">
-                  <Zap className={`w-12 h-12 ${stats.total >= 0 ? 'text-emerald-400' : 'text-rose-400'}`} />
-              </div>
+        <div className={`border p-3 md:p-4 rounded-xl relative overflow-hidden ${
+          stats.total >= 0 ? 'bg-emerald-500/5 border-emerald-500/10' : 'bg-rose-500/5 border-rose-500/10'
+        }`}>
+          <div className={`text-[9px] md:text-[10px] uppercase font-semibold tracking-wider mb-1 ${
+            stats.total >= 0 ? 'text-emerald-400/70' : 'text-rose-400/70'
+          }`}>Total Net</div>
+          <div className={`text-sm md:text-xl font-mono font-bold tabular-nums tracking-tight ${
+            stats.total >= 0 ? 'text-emerald-400' : 'text-rose-400'
+          }`}>
+            {formatPnL(stats.total)}
           </div>
+          <Zap className={`absolute right-3 top-3 w-8 h-8 md:w-10 md:h-10 ${
+            stats.total >= 0 ? 'text-emerald-900/30' : 'text-rose-900/30'
+          }`} />
+        </div>
       </div>
 
-      {/* TOOLBAR */}
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-         <div className="relative w-full md:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-            <input 
-                type="text" 
-                placeholder="Search Symbol or Strategy..." 
-                value={searchTerm}
-                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-4 py-2 text-sm text-white focus:border-blue-500 outline-none transition-all"
-            />
-         </div>
-         <div className="flex gap-2">
-            <button onClick={fetchHistory} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors">
-               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-            <button onClick={downloadCSV} className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg border border-slate-700 transition-colors">
-               <Download className="w-3 h-3" /> CSV
-            </button>
-         </div>
+      {/* ━━━ TOOLBAR ━━━ */}
+      <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 md:gap-4">
+        <div className="relative w-full sm:w-56">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-600" />
+          <input 
+            type="text" 
+            placeholder="Search symbol or strategy..." 
+            value={searchTerm}
+            onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+            className="w-full bg-black/20 border border-white/[0.06] rounded-lg pl-8 pr-3 py-2 text-xs md:text-sm text-white placeholder-slate-600 focus:border-blue-500/50 outline-none transition-all"
+          />
+        </div>
+        <div className="flex gap-1.5 self-end">
+          <button onClick={fetchHistory} className="p-2 hover:bg-white/[0.04] rounded-lg text-slate-500 hover:text-white transition-colors">
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <button onClick={downloadCSV} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/[0.04] hover:bg-white/[0.06] text-slate-400 text-[10px] md:text-xs font-semibold rounded-lg border border-white/[0.06] transition-colors">
+            <Download className="w-3 h-3" /> CSV
+          </button>
+        </div>
       </div>
 
-      {/* TABLE */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
-         <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-               <thead className="bg-slate-950 text-slate-500 text-xs uppercase font-bold tracking-wider">
-                  <tr>
-                     <th onClick={() => handleSort('entryDate')} className="p-4 cursor-pointer hover:bg-slate-800 transition-colors">
-                        <div className="flex items-center gap-1">Date <SortIcon column="entryDate"/></div>
-                     </th>
-                     <th onClick={() => handleSort('symbol')} className="p-4 cursor-pointer hover:bg-slate-800">
-                        <div className="flex items-center gap-1">Symbol <SortIcon column="symbol"/></div>
-                     </th>
-                     <th className="p-4 text-center">Strategy</th>
-                     <th onClick={() => handleSort('quantity')} className="p-4 text-right cursor-pointer hover:bg-slate-800">
-                        <div className="flex items-center justify-end gap-1">Qty <SortIcon column="quantity"/></div>
-                     </th>
-                     <th onClick={() => handleSort('entryPrice')} className="p-4 text-right cursor-pointer hover:bg-slate-800">
-                        <div className="flex items-center justify-end gap-1">Entry <SortIcon column="entryPrice"/></div>
-                     </th>
-                     <th onClick={() => handleSort('exitPrice')} className="p-4 text-right cursor-pointer hover:bg-slate-800">
-                        <div className="flex items-center justify-end gap-1">Exit <SortIcon column="exitPrice"/></div>
-                     </th>
-                     <th onClick={() => handleSort('pnl')} className="p-4 text-right cursor-pointer hover:bg-slate-800">
-                        <div className="flex items-center justify-end gap-1">P&L <SortIcon column="pnl"/></div>
-                     </th>
-                     <th className="p-4 text-center">Status</th>
-                     <th className="p-4 text-center">Action</th>
-                  </tr>
-               </thead>
-               <tbody className="divide-y divide-slate-800">
-                  {loading ? (
-                      <tr><td colSpan={9} className="p-10 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-500"/></td></tr>
-                  ) : paginatedTrades.length === 0 ? (
-                      <tr>
-                        <td colSpan={9} className="p-10 text-center text-slate-500 flex flex-col items-center gap-2">
-                           <AlertCircle className="w-6 h-6 opacity-50"/>
-                           No trades match your search.
-                        </td>
-                      </tr>
-                  ) : paginatedTrades.map((t) => (
-                      <tr key={t._id} className="hover:bg-slate-800/30 transition-colors group">
-                         <td className="p-4 text-slate-400 font-mono text-xs">
-                             <div className="text-white font-bold">{new Date(t.entryDate).toLocaleDateString()}</div>
-                             <div className="opacity-50">{new Date(t.entryDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                         </td>
-                         <td className="p-4 font-black text-white">{t.symbol}</td>
-                         <td className="p-4 text-center">
-                            <span className="bg-slate-800 text-slate-300 px-2 py-1 rounded text-[10px] border border-slate-700">
-                               {t.strategy || 'MANUAL'}
-                            </span>
-                         </td>
-                         <td className="p-4 text-right font-mono text-slate-300">{t.quantity}</td>
-                         <td className="p-4 text-right font-mono text-slate-300">₹{t.entryPrice.toFixed(2)}</td>
-                         <td className="p-4 text-right font-mono text-slate-300">
-                            {t.exitPrice ? `₹${t.exitPrice.toFixed(2)}` : '-'}
-                         </td>
-                         <td className={`p-4 text-right font-mono font-bold ${
-                             (t.pnl || 0) > 0 ? 'text-emerald-400' : (t.pnl || 0) < 0 ? 'text-rose-400' : 'text-slate-500'
-                         }`}>
-                             {(t.pnl || 0) > 0 ? '+' : ''}{t.pnl ? `₹${t.pnl.toFixed(2)}` : '-'}
-                         </td>
-                         <td className="p-4 text-center">
-                            <span className={`px-2 py-1 rounded text-[10px] font-bold border ${
-                                t.status === 'CLOSED' ? 'bg-slate-800 text-slate-400 border-slate-700' : 
-                                'bg-blue-500/10 text-blue-400 border-blue-500/20 animate-pulse'
-                            }`}>
-                               {t.status}
-                            </span>
-                         </td>
-                         <td className="p-4 text-center">
-                            <button 
-                                onClick={() => handleDelete(t._id, t.symbol)}
-                                className="p-2 text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-full transition-all"
-                                title="Delete Trade Record"
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </button>
-                         </td>
-                      </tr>
-                  ))}
-               </tbody>
-            </table>
-         </div>
+      {/* ━━━ TABLE ━━━ */}
+      <div className="bg-[#0c1120] border border-white/[0.04] rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-black/30 text-slate-500 text-[9px] md:text-[10px] uppercase font-semibold tracking-wider">
+              <tr>
+                <th onClick={() => handleSort('entryDate')} className="p-3 md:p-4 cursor-pointer hover:text-slate-300 transition-colors">
+                  <div className="flex items-center gap-1">Date <SortIcon column="entryDate"/></div>
+                </th>
+                <th onClick={() => handleSort('symbol')} className="p-3 md:p-4 cursor-pointer hover:text-slate-300">
+                  <div className="flex items-center gap-1">Symbol <SortIcon column="symbol"/></div>
+                </th>
+                <th className="p-3 md:p-4 text-center hidden sm:table-cell">Strategy</th>
+                <th onClick={() => handleSort('quantity')} className="p-3 md:p-4 text-right cursor-pointer hover:text-slate-300 hidden sm:table-cell">
+                  <div className="flex items-center justify-end gap-1">Qty <SortIcon column="quantity"/></div>
+                </th>
+                <th onClick={() => handleSort('entryPrice')} className="p-3 md:p-4 text-right cursor-pointer hover:text-slate-300">
+                  <div className="flex items-center justify-end gap-1">Entry <SortIcon column="entryPrice"/></div>
+                </th>
+                <th onClick={() => handleSort('exitPrice')} className="p-3 md:p-4 text-right cursor-pointer hover:text-slate-300 hidden md:table-cell">
+                  <div className="flex items-center justify-end gap-1">Exit <SortIcon column="exitPrice"/></div>
+                </th>
+                <th onClick={() => handleSort('pnl')} className="p-3 md:p-4 text-right cursor-pointer hover:text-slate-300">
+                  <div className="flex items-center justify-end gap-1">P&L <SortIcon column="pnl"/></div>
+                </th>
+                <th className="p-3 md:p-4 text-center">Status</th>
+                <th className="p-3 md:p-4 text-center w-10"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/[0.03]">
+              {loading ? (
+                <tr>
+                  <td colSpan={9} className="p-12 text-center">
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto text-blue-500/40" />
+                  </td>
+                </tr>
+              ) : paginatedTrades.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="p-12 text-center">
+                    <AlertCircle className="w-5 h-5 text-slate-700 mx-auto mb-2" />
+                    <p className="text-slate-600 text-xs">No trades match your search.</p>
+                  </td>
+                </tr>
+              ) : paginatedTrades.map((t) => (
+                <tr key={t._id} className="hover:bg-white/[0.015] transition-colors group">
+                  {/* Date */}
+                  <td className="p-3 md:p-4">
+                    <div className="text-[10px] md:text-xs text-white font-medium">{new Date(t.entryDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</div>
+                    <div className="text-[9px] text-slate-600">{new Date(t.entryDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                  </td>
 
-         {/* PAGINATION */}
-         {totalPages > 1 && (
-             <div className="bg-slate-900 border-t border-slate-800 p-3 flex justify-between items-center">
-                 <span className="text-xs text-slate-500">
-                    Page {currentPage} of {totalPages}
-                 </span>
-                 <div className="flex gap-2">
+                  {/* Symbol */}
+                  <td className="p-3 md:p-4">
+                    <span className="text-xs md:text-sm font-bold text-white tracking-tight">{t.symbol}</span>
+                  </td>
+
+                  {/* Strategy */}
+                  <td className="p-3 md:p-4 text-center hidden sm:table-cell">
+                    <span className="bg-white/[0.04] text-slate-400 px-2 py-0.5 rounded text-[9px] md:text-[10px] font-medium">
+                      {t.strategy || 'MANUAL'}
+                    </span>
+                  </td>
+
+                  {/* Qty */}
+                  <td className="p-3 md:p-4 text-right text-[10px] md:text-xs font-mono text-slate-400 tabular-nums hidden sm:table-cell">{t.quantity}</td>
+
+                  {/* Entry */}
+                  <td className="p-3 md:p-4 text-right text-[10px] md:text-xs font-mono text-slate-300 tabular-nums tracking-tight">₹{t.entryPrice.toFixed(2)}</td>
+
+                  {/* Exit */}
+                  <td className="p-3 md:p-4 text-right text-[10px] md:text-xs font-mono text-slate-400 tabular-nums tracking-tight hidden md:table-cell">
+                    {t.exitPrice ? `₹${t.exitPrice.toFixed(2)}` : '—'}
+                  </td>
+
+                  {/* P&L */}
+                  <td className={`p-3 md:p-4 text-right text-[10px] md:text-xs font-mono font-semibold tabular-nums tracking-tight ${
+                    (t.pnl || 0) > 0 ? 'text-emerald-400' : (t.pnl || 0) < 0 ? 'text-rose-400' : 'text-slate-600'
+                  }`}>
+                    {t.pnl ? formatPnL(t.pnl) : '—'}
+                  </td>
+
+                  {/* Status */}
+                  <td className="p-3 md:p-4 text-center">
+                    <span className={`px-1.5 md:px-2 py-0.5 rounded-full text-[8px] md:text-[9px] font-semibold tracking-wider uppercase ${
+                      t.status === 'CLOSED'
+                        ? 'bg-slate-500/10 text-slate-400'
+                        : 'bg-blue-500/10 text-blue-400'
+                    }`}>
+                      {t.status}
+                    </span>
+                  </td>
+
+                  {/* Delete */}
+                  <td className="p-3 md:p-4 text-center">
                     <button 
-                        disabled={currentPage === 1}
-                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                        className="p-1 rounded hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-slate-400"
+                      onClick={() => handleDelete(t._id, t.symbol)}
+                      className="p-1.5 text-slate-700 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                      title="Delete"
                     >
-                        <ChevronLeft className="w-5 h-5" />
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
-                    <button 
-                        disabled={currentPage === totalPages}
-                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                        className="p-1 rounded hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-slate-400"
-                    >
-                        <ChevronRight className="w-5 h-5" />
-                    </button>
-                 </div>
-             </div>
-         )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* ━━━ PAGINATION ━━━ */}
+        {totalPages > 1 && (
+          <div className="border-t border-white/[0.04] p-2.5 md:p-3 flex justify-between items-center">
+            <span className="text-[10px] md:text-xs text-slate-600 tabular-nums">
+              Page {currentPage} of {totalPages}
+            </span>
+            <div className="flex gap-1">
+              <button 
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                className="p-1.5 rounded-lg hover:bg-white/[0.04] disabled:opacity-30 text-slate-500"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button 
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                className="p-1.5 rounded-lg hover:bg-white/[0.04] disabled:opacity-30 text-slate-500"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

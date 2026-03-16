@@ -21,6 +21,7 @@ from app.database import AsyncSessionLocal
 from app.models.instrument import Instrument
 from app.services.broker_interface import (
     BrokerInterface,
+    FundsData,
     Holding,
     OrderRequest,
     OrderResponse,
@@ -613,6 +614,50 @@ class AngelOneBroker(BrokerInterface):
             logger.error("Angel One search failed: %s", exc)
             # Don't raise error, just return empty list to avoid breaking UI
             return []
+
+    # ━━━━━━━━━━━━━━━ Funds / Margin ━━━━━━━━━━━━━━━
+
+    async def get_funds(self) -> FundsData:
+        """Fetch real account funds from Angel One RMS API.
+
+        Uses SmartConnect.rmsLimit() to get actual available cash,
+        used margin, and total account balance.
+
+        Returns:
+            FundsData with real broker account values.
+        """
+        self._ensure_connected()
+
+        try:
+            rms = self._client.rmsLimit()
+
+            if not rms or not rms.get("data"):
+                logger.warning("Angel One rmsLimit returned no data")
+                return FundsData(available_cash=0.0, used_margin=0.0, total_balance=0.0)
+
+            data = rms["data"]
+
+            # Angel One RMS fields:
+            # net: Total account value
+            # availablecash: Cash available for trading
+            # utiliseddebits: Margin used by open positions/orders
+            available = float(data.get("availablecash", 0) or 0)
+            used = float(data.get("utiliseddebits", 0) or 0)
+            net = float(data.get("net", 0) or 0)
+
+            # If net is 0, compute from available + used
+            if net == 0:
+                net = available + used
+
+            logger.info("Angel One Funds — Net: ₹%.2f, Available: ₹%.2f, Used: ₹%.2f", net, available, used)
+            return FundsData(available_cash=available, used_margin=used, total_balance=net)
+
+        except Exception as exc:
+            logger.error("Angel One rmsLimit failed: %s", exc)
+            raise BrokerConnectionError(
+                broker="Angel One",
+                detail=f"Failed to fetch funds: {exc}",
+            )
 
     # ━━━━━━━━━━━━━━━ Private Helpers ━━━━━━━━━━━━━━━
 
