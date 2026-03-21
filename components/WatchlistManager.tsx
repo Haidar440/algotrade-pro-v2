@@ -3,8 +3,8 @@ import { DB_SERVICE } from '../services/db';
 import { BrokerState } from '../types';
 import Sparkline from './Sparkline';
 import AddStockModal from './AddStockModal';
-import { 
-  Search, Plus, Trash2, ChevronRight, Loader2, Edit3, Check, RotateCcw, X, 
+import {
+  Search, Plus, Trash2, ChevronRight, Loader2, Edit3, Check, RotateCcw, X,
   BarChart2
 } from 'lucide-react';
 
@@ -129,12 +129,12 @@ const WatchlistManager: React.FC<Props> = ({ onAnalyze, brokerState }) => {
   const handleDone = async () => {
     if (pendingDeletions.length === 0) { setIsEditMode(false); return; }
     try {
-        await Promise.all(pendingDeletions.map(name => DB_SERVICE.deleteWatchlist(name)));
-        const remaining = listNames.filter(n => !pendingDeletions.includes(n));
-        setListNames(remaining);
-        if (pendingDeletions.includes(activeList)) setActiveList(remaining[0] || 'Default');
-        setPendingDeletions([]);
-        setIsEditMode(false);
+      await Promise.all(pendingDeletions.map(name => DB_SERVICE.deleteWatchlist(name)));
+      const remaining = listNames.filter(n => !pendingDeletions.includes(n));
+      setListNames(remaining);
+      if (pendingDeletions.includes(activeList)) setActiveList(remaining[0] || 'Default');
+      setPendingDeletions([]);
+      setIsEditMode(false);
     } catch (e) { alert("Failed to delete watchlist."); }
   };
 
@@ -145,8 +145,8 @@ const WatchlistManager: React.FC<Props> = ({ onAnalyze, brokerState }) => {
 
   const filteredItems = useMemo(() => {
     const term = searchTerm.toLowerCase();
-    return items.filter(item => 
-      item.symbol.toLowerCase().includes(term) || 
+    return items.filter(item =>
+      item.symbol.toLowerCase().includes(term) ||
       (item.name || '').toLowerCase().includes(term)
     );
   }, [items, searchTerm]);
@@ -162,23 +162,26 @@ const WatchlistManager: React.FC<Props> = ({ onAnalyze, brokerState }) => {
     <div className="space-y-3 md:space-y-4 h-full flex flex-col">
 
       {/* ━━━ TAB BAR ━━━ */}
-      <div className="flex items-center justify-between border-b border-white/[0.04] pb-0 shrink-0">
+      <div className="flex items-center justify-between pb-0 shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
         <div className="flex items-center gap-0 overflow-x-auto scrollbar-hide pr-4">
           {listNames.filter(n => !pendingDeletions.includes(n)).map(name => (
             <div key={name} className="relative group">
               <button
                 onClick={() => !isEditMode && setActiveList(name)}
-                className={`px-3 md:px-4 py-2.5 md:py-3 text-xs md:text-sm font-semibold transition-all whitespace-nowrap border-b-2 flex items-center gap-1.5 ${
-                  activeList === name && !isEditMode
-                    ? 'text-blue-400 border-blue-400'
-                    : 'text-slate-500 border-transparent hover:text-slate-300'
-                } ${isEditMode ? 'cursor-default opacity-60' : 'cursor-pointer'}`}
+                className="px-3 md:px-4 py-2.5 md:py-3 text-xs md:text-sm font-medium transition-all whitespace-nowrap flex items-center gap-1.5"
+                style={{
+                  color: activeList === name && !isEditMode ? 'var(--accent-blue)' : 'var(--text-muted)',
+                  borderBottom: `2px solid ${activeList === name && !isEditMode ? 'var(--accent-blue)' : 'transparent'}`,
+                  cursor: isEditMode ? 'default' : 'pointer',
+                  opacity: isEditMode ? 0.6 : 1,
+                }}
               >
                 {name}
                 {isEditMode && (
                   <button
                     onClick={(e) => { e.stopPropagation(); markForDeletion(name); }}
-                    className="p-0.5 hover:bg-rose-500/20 rounded-full text-rose-500 transition-all"
+                    className="p-0.5 rounded-full transition-all"
+                    style={{ color: 'var(--accent-red)' }}
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -187,7 +190,7 @@ const WatchlistManager: React.FC<Props> = ({ onAnalyze, brokerState }) => {
             </div>
           ))}
           {!isEditMode && (
-            <button onClick={handleCreateNewList} className="p-2 ml-1 text-slate-600 hover:text-emerald-400 transition-colors">
+            <button onClick={handleCreateNewList} className="p-2 ml-1 transition-colors" style={{ color: 'var(--text-muted)' }}>
               <Plus className="w-3.5 h-3.5" />
             </button>
           )}
@@ -198,7 +201,8 @@ const WatchlistManager: React.FC<Props> = ({ onAnalyze, brokerState }) => {
           {!isEditMode && (
             <button
               onClick={() => setIsAddModalOpen(true)}
-              className="flex items-center gap-1 px-2.5 md:px-3 py-1.5 bg-blue-600 text-white rounded-lg text-[10px] md:text-xs font-semibold hover:bg-blue-500 transition-all"
+              className="flex items-center gap-1 px-2.5 md:px-3 py-1.5 text-white rounded-lg text-[10px] md:text-xs font-medium transition-all"
+              style={{ background: 'var(--accent-blue)' }}
             >
               <Plus className="w-3 h-3" /> Add
             </button>
@@ -206,16 +210,16 @@ const WatchlistManager: React.FC<Props> = ({ onAnalyze, brokerState }) => {
           {isEditMode ? (
             <div className="flex items-center gap-1.5">
               {pendingDeletions.length > 0 && (
-                <button onClick={handleUndo} className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800/80 text-slate-300 rounded-lg text-[10px] md:text-xs font-semibold hover:bg-slate-700 border border-white/[0.06]">
+                <button onClick={handleUndo} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] md:text-xs font-medium" style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
                   <RotateCcw className="w-3 h-3" /> Undo
                 </button>
               )}
-              <button onClick={handleDone} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-[10px] md:text-xs font-semibold hover:bg-emerald-500">
+              <button onClick={handleDone} className="flex items-center gap-1 px-3 py-1.5 text-white rounded-lg text-[10px] md:text-xs font-medium" style={{ background: 'var(--accent-green)' }}>
                 <Check className="w-3 h-3" /> Done
               </button>
             </div>
           ) : (
-            <button onClick={() => setIsEditMode(true)} className="flex items-center gap-1 px-2.5 md:px-3 py-1.5 bg-transparent text-slate-500 rounded-lg text-[10px] md:text-xs font-semibold hover:text-white hover:bg-white/[0.04] transition-all border border-white/[0.06]">
+            <button onClick={() => setIsEditMode(true)} className="flex items-center gap-1 px-2.5 md:px-3 py-1.5 rounded-lg text-[10px] md:text-xs font-medium transition-all" style={{ color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
               <Edit3 className="w-3 h-3" /> Edit
             </button>
           )}
@@ -226,22 +230,26 @@ const WatchlistManager: React.FC<Props> = ({ onAnalyze, brokerState }) => {
       {!isEditMode && (
         <div className="flex justify-end shrink-0">
           <div className="relative w-full md:w-56">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-600" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
             <input
               type="text"
-              placeholder={`Search ${activeList}...`}
+              placeholder={`Search ${activeList}…`}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-black/20 border border-white/[0.06] rounded-lg pl-8 pr-3 py-2 text-xs md:text-sm text-white placeholder-slate-600 focus:border-blue-500/50 outline-none transition-all"
+              className="w-full rounded-lg pl-8 pr-3 py-2 text-xs md:text-sm outline-none transition-all"
+              style={{ background: 'var(--bg-inset)', border: '1px solid var(--border)', color: 'var(--text)' }}
             />
           </div>
         </div>
       )}
 
       {/* ━━━ TABLE ━━━ */}
-      <div className={`bg-[#0c1120] border border-white/[0.04] rounded-xl overflow-hidden transition-all duration-300 flex-1 overflow-auto ${isEditMode ? 'opacity-30 blur-[2px] pointer-events-none' : 'opacity-100'}`}>
+      <div
+        className={`rounded-xl overflow-hidden transition-all duration-300 flex-1 overflow-auto ${isEditMode ? 'opacity-30 blur-[2px] pointer-events-none' : 'opacity-100'}`}
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
+      >
         <table className="w-full text-left">
-          <thead className="bg-black/30 text-slate-500 text-[9px] md:text-[10px] uppercase font-semibold tracking-wider border-b border-white/[0.04] sticky top-0 z-10">
+          <thead className="text-[9px] md:text-[10px] uppercase font-medium tracking-wider sticky top-0 z-10" style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>
             <tr>
               <th className="p-3 md:p-4">Instrument</th>
               <th className="p-3 md:p-4 text-center hidden md:table-cell">Trend</th>
@@ -250,32 +258,36 @@ const WatchlistManager: React.FC<Props> = ({ onAnalyze, brokerState }) => {
               <th className="p-3 md:p-4 text-center">Action</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/[0.03]">
+          <tbody>
             {loading ? (
               <tr>
                 <td colSpan={5} className="p-16 text-center">
-                  <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-500/40" />
+                  <Loader2 className="w-6 h-6 animate-spin mx-auto" style={{ color: 'var(--accent-blue)', opacity: 0.4 }} />
                 </td>
               </tr>
             ) : filteredItems.length === 0 ? (
               <tr>
-                <td colSpan={5} className="p-16 text-center text-slate-600 text-xs">
-                  {pendingDeletions.length > 0 ? "Reviewing deletions..." : "Watchlist is empty. Tap + Add to begin."}
+                <td colSpan={5} className="p-16 text-center text-xs" style={{ color: 'var(--text-muted)' }}>
+                  {pendingDeletions.length > 0 ? "Reviewing deletions…" : "Watchlist is empty. Tap + Add to begin."}
                 </td>
               </tr>
             ) : filteredItems.map((item) => (
-              <tr key={item.id} className="hover:bg-white/[0.015] transition-colors group">
+              <tr key={item.id} className="group transition-colors" style={{ borderBottom: '1px solid var(--border)' }}>
                 {/* Instrument */}
                 <td className="p-3 md:p-4">
                   <div className="flex items-center gap-2.5 md:gap-3">
-                    <div className={`w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center text-[10px] md:text-xs font-bold ${
-                      item.changePercent >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
-                    }`}>
+                    <div
+                      className="w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center text-[10px] md:text-xs font-semibold"
+                      style={{
+                        background: item.changePercent >= 0 ? 'var(--ring-green)' : 'var(--ring-red)',
+                        color: item.changePercent >= 0 ? 'var(--accent-green)' : 'var(--accent-red)',
+                      }}
+                    >
                       {cleanSymbol(item.symbol).substring(0, 2)}
                     </div>
                     <div className="min-w-0">
-                      <div className="text-xs md:text-sm font-bold text-white tracking-tight truncate">{cleanSymbol(item.symbol)}</div>
-                      <div className="text-[9px] md:text-[10px] text-slate-600 truncate">{item.name || "Equity"}</div>
+                      <div className="text-xs md:text-sm font-semibold tracking-tight truncate" style={{ color: 'var(--text)' }}>{cleanSymbol(item.symbol)}</div>
+                      <div className="text-[9px] md:text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>{item.name || "Equity"}</div>
                     </div>
                   </div>
                 </td>
@@ -288,18 +300,21 @@ const WatchlistManager: React.FC<Props> = ({ onAnalyze, brokerState }) => {
                 </td>
 
                 {/* LTP */}
-                <td className={`p-3 md:p-4 text-right text-xs md:text-sm font-mono font-semibold tabular-nums tracking-tight transition-all duration-700 ${
-                  item.lastChange === 'flash-up' ? 'text-emerald-400 flash-up'
-                    : item.lastChange === 'flash-down' ? 'text-rose-400 flash-down'
-                    : 'text-white'
-                }`}>
+                <td className={`p-3 md:p-4 text-right text-xs md:text-sm font-mono font-medium tabular-nums tracking-tight transition-all duration-700 ${item.lastChange === 'flash-up' ? 'flash-up'
+                    : item.lastChange === 'flash-down' ? 'flash-down'
+                      : ''
+                  }`} style={{
+                    color: item.lastChange === 'flash-up' ? 'var(--accent-green)'
+                      : item.lastChange === 'flash-down' ? 'var(--accent-red)'
+                        : 'var(--text)'
+                  }}>
                   ₹{item.price?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </td>
 
                 {/* Change % */}
-                <td className={`p-3 md:p-4 text-right text-[10px] md:text-xs font-mono font-semibold tabular-nums ${
-                  item.changePercent >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                }`}>
+                <td className="p-3 md:p-4 text-right text-[10px] md:text-xs font-mono font-medium tabular-nums" style={{
+                  color: item.changePercent >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'
+                }}>
                   {item.changePercent >= 0 ? '+' : ''}{item.changePercent?.toFixed(2)}%
                 </td>
 
@@ -308,21 +323,24 @@ const WatchlistManager: React.FC<Props> = ({ onAnalyze, brokerState }) => {
                   <div className="flex justify-center gap-1 md:gap-1.5">
                     <button
                       onClick={() => openChartInNewTab(item.symbol, item.token)}
-                      className="p-1.5 md:p-2 hover:bg-emerald-500/10 text-slate-500 hover:text-emerald-400 rounded-lg transition-all"
+                      className="p-1.5 md:p-2 rounded-lg transition-all"
+                      style={{ color: 'var(--text-muted)' }}
                       title="Open Chart"
                     >
                       <BarChart2 className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => onAnalyze(item.symbol)}
-                      className="p-1.5 md:p-2 hover:bg-blue-500/10 text-slate-500 hover:text-blue-400 rounded-lg transition-all"
+                      className="p-1.5 md:p-2 rounded-lg transition-all"
+                      style={{ color: 'var(--text-muted)' }}
                       title="Analyze"
                     >
                       <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => handleDeleteItem(item.id)}
-                      className="p-1.5 md:p-2 hover:bg-rose-500/10 text-slate-600 hover:text-rose-400 rounded-lg transition-all"
+                      className="p-1.5 md:p-2 rounded-lg transition-all"
+                      style={{ color: 'var(--text-muted)' }}
                       title="Remove"
                     >
                       <Trash2 className="w-3.5 h-3.5" />

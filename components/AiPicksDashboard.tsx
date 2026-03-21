@@ -31,51 +31,56 @@ const AiPicksDashboard: React.FC = () => {
   };
 
   const getRatingStyle = (rating: string) => {
-    if (rating === 'GOLDEN') return 'text-amber-400 bg-amber-500/10';
-    if (rating === 'STRONG') return 'text-emerald-400 bg-emerald-500/10';
-    if (rating === 'MODERATE') return 'text-cyan-400 bg-cyan-500/10';
-    return 'text-slate-400 bg-slate-500/10';
+    if (rating === 'GOLDEN') return { color: 'var(--accent-amber)', bg: 'var(--ring-green)' };
+    if (rating === 'STRONG') return { color: 'var(--accent-green)', bg: 'var(--ring-green)' };
+    if (rating === 'MODERATE') return { color: 'var(--accent-cyan)', bg: 'var(--ring-blue)' };
+    return { color: 'var(--text-muted)', bg: 'var(--bg-inset)' };
   };
 
   const getScoreColor = (score: number) => {
-    if (score >= 70) return 'text-emerald-400';
-    if (score >= 50) return 'text-amber-400';
-    return 'text-rose-400';
+    if (score >= 70) return 'var(--accent-green)';
+    if (score >= 50) return 'var(--accent-amber)';
+    return 'var(--accent-red)';
   };
 
-  const getScoreRing = (score: number) => {
-    if (score >= 70) return 'ring-emerald-500/30';
-    if (score >= 50) return 'ring-amber-500/30';
-    return 'ring-rose-500/30';
+  const getScoreRingColor = (score: number) => {
+    if (score >= 70) return 'var(--ring-green)';
+    if (score >= 50) return 'rgba(217, 119, 6, 0.2)';
+    return 'var(--ring-red)';
   };
 
   const formatINR = (n: number) =>
     new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(n);
 
   return (
-    <div className="max-w-5xl mx-auto space-y-4 md:space-y-6">
+    <div className="max-w-5xl mx-auto space-y-3 md:space-y-5">
 
       {/* ━━━ HEADER CARD ━━━ */}
-      <div className="bg-[#0c1120] rounded-2xl border border-white/[0.04] p-4 md:p-6">
+      <div className="rounded-xl p-4 md:p-6" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}>
         <div className="flex items-center gap-3 mb-4">
-          <div className="p-2 rounded-xl bg-cyan-500/10 shrink-0">
-            <Target className="w-5 h-5 md:w-6 md:h-6 text-cyan-400" />
+          <div className="p-2 rounded-lg shrink-0" style={{ background: 'var(--ring-blue)' }}>
+            <Target className="w-5 h-5 md:w-5 md:h-5" style={{ color: 'var(--accent-cyan)' }} />
           </div>
           <div className="min-w-0">
-            <h2 className="text-base md:text-lg font-bold text-white tracking-tight">AI Stock Picker</h2>
-            <p className="text-[10px] md:text-xs text-slate-500 truncate">10-layer scoring · Technicals + Fundamentals + News Sentiment</p>
+            <h2 className="text-sm md:text-base font-semibold tracking-tight" style={{ color: 'var(--text)' }}>AI Stock Picker</h2>
+            <p className="text-[10px] md:text-xs truncate" style={{ color: 'var(--text-muted)' }}>10-layer scoring · Technicals + Fundamentals + News Sentiment</p>
           </div>
         </div>
 
         {/* Capital + Scan */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
           <div className="flex-1">
-            <label className="text-[10px] text-slate-500 uppercase font-semibold tracking-wider block mb-1.5">Investment Capital (₹)</label>
+            <label className="text-[10px] uppercase font-medium tracking-wider block mb-1.5" style={{ color: 'var(--text-muted)' }}>Investment Capital (₹)</label>
             <input
               type="number"
               value={capital}
               onChange={(e) => setCapital(Number(e.target.value))}
-              className="w-full bg-black/30 border border-white/[0.06] rounded-lg px-3 py-2.5 text-sm md:text-base text-white font-mono tabular-nums focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 outline-none transition-all"
+              className="w-full rounded-lg px-3 py-2.5 text-sm font-mono tabular-nums outline-none transition-all"
+              style={{
+                background: 'var(--bg-inset)',
+                border: '1px solid var(--border)',
+                color: 'var(--text)',
+              }}
               min={10000}
               step={10000}
             />
@@ -83,33 +88,34 @@ const AiPicksDashboard: React.FC = () => {
           <button
             onClick={handleScan}
             disabled={loading}
-            className="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-800 disabled:text-slate-500 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-2 transition-all shrink-0"
+            className="px-5 py-2.5 text-white text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-all shrink-0 disabled:opacity-40"
+            style={{ background: loading ? 'var(--text-muted)' : 'var(--accent-blue)' }}
           >
             {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-            {loading ? 'Scanning...' : 'Scan Market'}
+            {loading ? 'Scanning…' : 'Scan Market'}
           </button>
         </div>
       </div>
 
       {/* ━━━ ERROR ━━━ */}
       {error && (
-        <div className="bg-rose-500/5 border border-rose-500/10 rounded-xl p-3 md:p-4 flex items-center gap-3">
-          <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-          <p className="text-rose-300 text-xs md:text-sm">{error}</p>
+        <div className="rounded-lg p-3 md:p-4 flex items-center gap-3" style={{ background: 'var(--ring-red)', border: '1px solid var(--accent-red)', borderColor: 'rgba(239,68,68,0.2)' }}>
+          <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: 'var(--accent-red)' }} />
+          <p className="text-xs md:text-sm" style={{ color: 'var(--accent-red)' }}>{error}</p>
         </div>
       )}
 
       {/* ━━━ RESULTS SUMMARY — 3-stat bar ━━━ */}
       {result && (
-        <div className="grid grid-cols-3 gap-2 md:gap-4">
+        <div className="grid grid-cols-3 gap-2 md:gap-3">
           {[
-            { label: 'Scanned', value: result.total_scanned.toString(), color: 'text-white' },
-            { label: 'Picks', value: result.picks_found.toString(), color: 'text-emerald-400' },
-            { label: 'Capital', value: `₹${(result.capital / 1000).toFixed(0)}K`, color: 'text-cyan-400' },
+            { label: 'Scanned', value: result.total_scanned.toString(), color: 'var(--text)' },
+            { label: 'Picks', value: result.picks_found.toString(), color: 'var(--accent-green)' },
+            { label: 'Capital', value: `₹${(result.capital / 1000).toFixed(0)}K`, color: 'var(--accent-cyan)' },
           ].map(s => (
-            <div key={s.label} className="bg-[#0c1120] rounded-xl border border-white/[0.04] p-3 md:p-4 text-center">
-              <p className="text-[9px] md:text-[10px] text-slate-500 uppercase font-semibold tracking-wider">{s.label}</p>
-              <p className={`text-lg md:text-2xl font-mono font-bold tabular-nums mt-0.5 ${s.color}`}>{s.value}</p>
+            <div key={s.label} className="rounded-lg p-3 md:p-4 text-center" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+              <p className="text-[9px] md:text-[10px] uppercase font-medium tracking-wider" style={{ color: 'var(--text-muted)' }}>{s.label}</p>
+              <p className="text-lg md:text-2xl font-mono font-semibold tabular-nums mt-0.5" style={{ color: s.color }}>{s.value}</p>
             </div>
           ))}
         </div>
@@ -117,85 +123,87 @@ const AiPicksDashboard: React.FC = () => {
 
       {/* ━━━ STOCK PICK CARDS ━━━ */}
       {result && result.top_picks.length > 0 && (
-        <div className="space-y-2 md:space-y-3">
-          <h3 className="text-[10px] md:text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2 px-1">
-            <Star className="w-3.5 h-3.5 text-amber-400" /> Top Picks
+        <div className="space-y-2 md:space-y-2.5">
+          <h3 className="text-[10px] md:text-xs font-medium uppercase tracking-wider flex items-center gap-2 px-1" style={{ color: 'var(--text-muted)' }}>
+            <Star className="w-3.5 h-3.5" style={{ color: 'var(--accent-amber)' }} /> Top Picks
           </h3>
           {result.top_picks.map((pick: StockPick) => {
             const isExpanded = expandedPick === pick.symbol;
             const upside = ((pick.target - pick.price) / pick.price * 100).toFixed(1);
             const downside = ((pick.price - pick.stop_loss) / pick.price * 100).toFixed(1);
+            const ratingStyle = getRatingStyle(pick.rating);
             return (
               <div
                 key={pick.symbol}
-                className="bg-[#0c1120] rounded-xl border border-white/[0.04] overflow-hidden transition-all hover:border-white/[0.08]"
+                className="rounded-xl overflow-hidden transition-all"
+                style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
               >
                 {/* ── Main Row ── */}
                 <div
-                  className="p-3 md:p-4 flex items-center justify-between cursor-pointer active:bg-white/[0.02]"
+                  className="p-3 md:p-4 flex items-center justify-between cursor-pointer transition-colors"
                   onClick={() => setExpandedPick(isExpanded ? null : pick.symbol)}
+                  style={{ borderBottom: isExpanded ? '1px solid var(--border)' : 'none' }}
                 >
                   <div className="flex items-center gap-3 md:gap-4 min-w-0">
                     {/* Score Circle */}
-                    <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full ring-2 ${getScoreRing(pick.score)} flex flex-col items-center justify-center shrink-0 bg-black/30`}>
-                      <p className={`text-sm md:text-base font-bold tabular-nums ${getScoreColor(pick.score)}`}>{pick.score}</p>
-                      <p className="text-[7px] md:text-[8px] text-slate-500 -mt-0.5 font-medium">SCORE</p>
+                    <div
+                      className="w-10 h-10 md:w-11 md:h-11 rounded-full flex flex-col items-center justify-center shrink-0"
+                      style={{ background: 'var(--bg-inset)', border: `2px solid ${getScoreRingColor(pick.score)}` }}
+                    >
+                      <p className="text-sm md:text-base font-semibold tabular-nums" style={{ color: getScoreColor(pick.score) }}>{pick.score}</p>
+                      <p className="text-[7px] md:text-[8px] font-medium -mt-0.5" style={{ color: 'var(--text-muted)' }}>SCORE</p>
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm md:text-base font-bold text-white tracking-tight">{pick.symbol}</p>
-                      <p className="text-[10px] md:text-xs text-slate-500 tabular-nums">₹{pick.price.toFixed(2)} · {pick.entry_range}</p>
+                      <p className="text-sm md:text-sm font-semibold tracking-tight" style={{ color: 'var(--text)' }}>{pick.symbol}</p>
+                      <p className="text-[10px] md:text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>₹{pick.price.toFixed(2)} · {pick.entry_range}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 md:gap-3 shrink-0">
-                    <span className={`px-2 md:px-2.5 py-0.5 md:py-1 rounded-full text-[9px] md:text-[10px] font-semibold tracking-wider uppercase ${getRatingStyle(pick.rating)}`}>
+                    <span
+                      className="px-2 md:px-2.5 py-0.5 md:py-1 rounded-full text-[9px] md:text-[10px] font-semibold tracking-wider uppercase"
+                      style={{ color: ratingStyle.color, background: ratingStyle.bg }}
+                    >
                       {pick.rating}
                     </span>
                     {isExpanded
-                      ? <ChevronUp className="w-4 h-4 text-slate-600" />
-                      : <ChevronDown className="w-4 h-4 text-slate-600" />
+                      ? <ChevronUp className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+                      : <ChevronDown className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
                     }
                   </div>
                 </div>
 
                 {/* ── Expanded Details ── */}
                 {isExpanded && (
-                  <div className="px-3 md:px-4 pb-3 md:pb-4 pt-0 border-t border-white/[0.04] space-y-3">
+                  <div className="px-3 md:px-4 pb-3 md:pb-4 pt-3 space-y-3">
                     {/* Key Levels Grid */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-3">
-                      <div className="bg-black/20 rounded-lg p-2.5 md:p-3 text-center border border-white/[0.03]">
-                        <p className="text-[8px] md:text-[9px] text-slate-500 uppercase font-semibold tracking-wider">Stop Loss</p>
-                        <p className="text-xs md:text-sm font-mono font-bold text-rose-400 tabular-nums mt-0.5">₹{pick.stop_loss.toFixed(2)}</p>
-                        <p className="text-[8px] md:text-[9px] text-rose-500/60 tabular-nums">-{downside}%</p>
-                      </div>
-                      <div className="bg-black/20 rounded-lg p-2.5 md:p-3 text-center border border-white/[0.03]">
-                        <p className="text-[8px] md:text-[9px] text-slate-500 uppercase font-semibold tracking-wider">Target</p>
-                        <p className="text-xs md:text-sm font-mono font-bold text-emerald-400 tabular-nums mt-0.5">₹{pick.target.toFixed(2)}</p>
-                        <p className="text-[8px] md:text-[9px] text-emerald-500/60 tabular-nums">+{upside}%</p>
-                      </div>
-                      <div className="bg-black/20 rounded-lg p-2.5 md:p-3 text-center border border-white/[0.03]">
-                        <p className="text-[8px] md:text-[9px] text-slate-500 uppercase font-semibold tracking-wider">Risk:Reward</p>
-                        <p className="text-xs md:text-sm font-mono font-bold text-cyan-400 tabular-nums mt-0.5">{pick.risk_reward}</p>
-                      </div>
-                      <div className="bg-black/20 rounded-lg p-2.5 md:p-3 text-center border border-white/[0.03]">
-                        <p className="text-[8px] md:text-[9px] text-slate-500 uppercase font-semibold tracking-wider">Qty</p>
-                        <p className="text-xs md:text-sm font-mono font-bold text-white tabular-nums mt-0.5">{pick.shares}</p>
-                        <p className="text-[8px] md:text-[9px] text-slate-500 tabular-nums">₹{formatINR(pick.investment)}</p>
-                      </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      {[
+                        { label: 'Stop Loss', value: `₹${pick.stop_loss.toFixed(2)}`, sub: `-${downside}%`, color: 'var(--accent-red)', subColor: 'var(--accent-red)' },
+                        { label: 'Target', value: `₹${pick.target.toFixed(2)}`, sub: `+${upside}%`, color: 'var(--accent-green)', subColor: 'var(--accent-green)' },
+                        { label: 'Risk:Reward', value: pick.risk_reward, sub: null, color: 'var(--accent-cyan)', subColor: null },
+                        { label: 'Qty', value: String(pick.shares), sub: `₹${formatINR(pick.investment)}`, color: 'var(--text)', subColor: 'var(--text-muted)' },
+                      ].map(item => (
+                        <div key={item.label} className="rounded-lg p-2.5 md:p-3 text-center" style={{ background: 'var(--bg-inset)', border: '1px solid var(--border)' }}>
+                          <p className="text-[8px] md:text-[9px] uppercase font-medium tracking-wider" style={{ color: 'var(--text-muted)' }}>{item.label}</p>
+                          <p className="text-xs md:text-sm font-mono font-semibold tabular-nums mt-0.5" style={{ color: item.color }}>{item.value}</p>
+                          {item.sub && <p className="text-[8px] md:text-[9px] tabular-nums" style={{ color: item.subColor || 'var(--text-muted)', opacity: 0.7 }}>{item.sub}</p>}
+                        </div>
+                      ))}
                     </div>
 
                     {/* Risk Badge */}
                     <div className="flex items-center gap-2">
-                      <Shield className="w-3 h-3 text-amber-400/70" />
-                      <span className="text-[10px] md:text-xs text-slate-500">Max Risk:</span>
-                      <span className="text-[10px] md:text-xs text-rose-400 font-semibold font-mono tabular-nums">₹{formatINR(pick.risk_amount)}</span>
+                      <Shield className="w-3 h-3" style={{ color: 'var(--accent-amber)', opacity: 0.7 }} />
+                      <span className="text-[10px] md:text-xs" style={{ color: 'var(--text-muted)' }}>Max Risk:</span>
+                      <span className="text-[10px] md:text-xs font-semibold font-mono tabular-nums" style={{ color: 'var(--accent-red)' }}>₹{formatINR(pick.risk_amount)}</span>
                     </div>
 
                     {/* Reasons */}
                     <div className="space-y-1">
-                      <p className="text-[9px] md:text-[10px] text-slate-500 uppercase font-semibold tracking-wider">Analysis Reasons</p>
+                      <p className="text-[9px] md:text-[10px] uppercase font-medium tracking-wider" style={{ color: 'var(--text-muted)' }}>Analysis Reasons</p>
                       {pick.reasons.map((r, i) => (
-                        <div key={i} className="flex items-start gap-2 text-[11px] md:text-xs text-slate-400 leading-relaxed">
-                          <span className="text-cyan-500/60 mt-px shrink-0">•</span>
+                        <div key={i} className="flex items-start gap-2 text-[11px] md:text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                          <span className="mt-px shrink-0" style={{ color: 'var(--accent-cyan)', opacity: 0.6 }}>•</span>
                           <span>{r}</span>
                         </div>
                       ))}
@@ -210,19 +218,19 @@ const AiPicksDashboard: React.FC = () => {
 
       {/* ━━━ No Picks ━━━ */}
       {result && result.top_picks.length === 0 && (
-        <div className="bg-[#0c1120] rounded-xl border border-white/[0.04] p-8 md:p-12 text-center">
-          <AlertTriangle className="w-8 h-8 text-amber-400/60 mx-auto mb-3" />
-          <p className="text-white font-semibold text-sm md:text-base">No Strong Picks Found</p>
-          <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">Market conditions don't favor any stock right now. Try again later.</p>
+        <div className="rounded-xl p-8 md:p-12 text-center" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+          <AlertTriangle className="w-8 h-8 mx-auto mb-3" style={{ color: 'var(--accent-amber)', opacity: 0.6 }} />
+          <p className="font-semibold text-sm md:text-base" style={{ color: 'var(--text)' }}>No Strong Picks Found</p>
+          <p className="text-xs mt-1 max-w-sm mx-auto" style={{ color: 'var(--text-muted)' }}>Market conditions don't favor any stock right now. Try again later.</p>
         </div>
       )}
 
       {/* ━━━ Initial State ━━━ */}
       {!result && !loading && !error && (
-        <div className="bg-[#0c1120] rounded-xl border border-white/[0.04] p-8 md:p-12 text-center">
-          <Target className="w-10 h-10 text-cyan-500/30 mx-auto mb-4" />
-          <p className="text-white font-semibold text-sm md:text-base">Smart Stock Scanner</p>
-          <p className="text-[11px] md:text-xs text-slate-500 mt-2 max-w-md mx-auto leading-relaxed">
+        <div className="rounded-xl p-8 md:p-12 text-center" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+          <Target className="w-10 h-10 mx-auto mb-4" style={{ color: 'var(--accent-cyan)', opacity: 0.3 }} />
+          <p className="font-semibold text-sm md:text-base" style={{ color: 'var(--text)' }}>Smart Stock Scanner</p>
+          <p className="text-[11px] md:text-xs mt-2 max-w-md mx-auto leading-relaxed" style={{ color: 'var(--text-muted)' }}>
             Dynamically discovers NSE swing candidates via TradingView screener (EMA alignment,
             volume surge, RSI filter), then deep-scores using technicals, yfinance fundamentals
             (PE, debt, market cap), Nifty relative strength, and Gemini AI news sentiment.

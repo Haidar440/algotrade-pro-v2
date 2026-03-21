@@ -54,6 +54,9 @@ async def lifespan(app: FastAPI):
 
     if settings.TELEGRAM_WEBHOOK_URL:
         telegram_bot.set_webhook(settings.TELEGRAM_WEBHOOK_URL)
+    else:
+        # No webhook → start long-polling for local dev
+        telegram_bot.start_polling()
 
     logger.info("🚀 Application ready — accepting requests")
 
@@ -61,6 +64,7 @@ async def lifespan(app: FastAPI):
 
     # ── Shutdown ──
     logger.info("Shutting down %s...", __app_name__)
+    telegram_bot.stop_polling()
     await close_db()
     logger.info("👋 Shutdown complete")
 
