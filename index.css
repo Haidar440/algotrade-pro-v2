@@ -2,17 +2,39 @@
 
 /* ━━━ AlgoTrade Pro — Global Design Tokens ━━━ */
 :root {
+  /* ── Backgrounds ── */
   --bg-base: #06080f;
   --bg-card: #0c1120;
   --bg-elevated: #111827;
+  --bg-inset: #070910;
+
+  /* ── Borders ── */
   --border-subtle: rgba(255, 255, 255, 0.04);
   --border-default: rgba(255, 255, 255, 0.06);
+  --border: var(--border-default);  /* shorthand alias */
+
+  /* ── Typography ── */
   --text-primary: #f1f5f9;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
+  --text: var(--text-primary);  /* shorthand alias */
+
+  /* ── Accent colours ── */
   --accent-green: #10b981;
   --accent-red: #ef4444;
   --accent-blue: #3b82f6;
+  --accent-amber: #d97706;
+  --accent-cyan: #06b6d4;
+
+  /* ── Tinted ring backgrounds (for badges / icon halos) ── */
+  --ring-green: rgba(16, 185, 129, 0.12);
+  --ring-red: rgba(239, 68, 68, 0.12);
+  --ring-blue: rgba(59, 130, 246, 0.12);
+  --ring-amber: rgba(217, 119, 6, 0.12);
+
+  /* ── Shadow ── */
+  --shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
 body {
@@ -50,3 +72,69 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* ━━━ Price Flash Animations — Watchlist LTP Updates ━━━ */
+@keyframes atpro-flash-green {
+  0%   { background-color: rgba(16, 185, 129, 0.22); }
+  100% { background-color: transparent; }
+}
+
+@keyframes atpro-flash-red {
+  0%   { background-color: rgba(239, 68, 68, 0.22); }
+  100% { background-color: transparent; }
+}
+
+.flash-up {
+  animation: atpro-flash-green 1.5s ease-out;
+}
+
+.flash-down {
+  animation: atpro-flash-red 1.5s ease-out;
+}
+
+/* ━━━ Entry Animations (animate-in / tailwindcss-animate compatible) ━━━ */
+@keyframes atpro-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes atpro-slide-up {
+  from { opacity: 0; transform: translateY(1rem); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes atpro-slide-right {
+  from { opacity: 0; transform: translateX(1.25rem); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes atpro-slide-down {
+  from { opacity: 0; transform: translateY(-0.75rem); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes atpro-zoom-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* Base: only active when combined with a direction class */
+.animate-in {
+  animation-fill-mode: both;
+  animation-duration: 300ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-in.fade-in               { animation-name: atpro-fade-in; }
+.animate-in.slide-in-from-bottom-2,
+.animate-in.slide-in-from-bottom-4 { animation-name: atpro-slide-up; }
+.animate-in.slide-in-from-right,
+.animate-in.slide-in-from-right-5  { animation-name: atpro-slide-right; }
+.animate-in.slide-in-from-top      { animation-name: atpro-slide-down; }
+.animate-in.zoom-in,
+.animate-in.zoom-in-95             { animation-name: atpro-zoom-in; }
+
+/* Duration overrides — only affect animation-duration, not transition-duration */
+.animate-in.duration-200 { animation-duration: 200ms; }
+.animate-in.duration-300 { animation-duration: 300ms; }
+.animate-in.duration-500 { animation-duration: 500ms; }
