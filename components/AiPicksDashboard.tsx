@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { fetchAIStockPicks, StockPicksResult, StockPick } from '../services/gemini';
+import { getUserErrorMessage } from '../services/errorMessages';
 import {
   Target, TrendingUp, TrendingDown, AlertTriangle, Zap,
   RefreshCw, DollarSign, Shield, Star, ChevronDown, ChevronUp
@@ -23,8 +24,8 @@ const AiPicksDashboard: React.FC = () => {
     try {
       const data = await fetchAIStockPicks(capital);
       setResult(data);
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch AI picks');
+    } catch (err: unknown) {
+      setError(getUserErrorMessage(err, 'ai-picks'));
     } finally {
       setLoading(false);
     }

@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from './AuthContext';
+import { ApiError } from '../services/api';
+import { getUserErrorMessage } from '../services/errorMessages';
 import { Lock, User, Key, ArrowRight, Activity, Zap } from 'lucide-react';
 
 interface LoginScreenProps {
@@ -12,15 +14,38 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onSwitchToRegister }) 
     const [password, setPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    const [retryInSeconds, setRetryInSeconds] = useState(0);
+
+    useEffect(() => {
+        if (retryInSeconds <= 0) return;
+        const timer = window.setInterval(() => {
+            setRetryInSeconds(prev => Math.max(0, prev - 1));
+        }, 1000);
+        return () => window.clearInterval(timer);
+    }, [retryInSeconds]);
+
+    const isLocked = retryInSeconds > 0;
+    const retryLabel = useMemo(() => {
+        const minutes = Math.floor(retryInSeconds / 60);
+        const seconds = retryInSeconds % 60;
+        return `${minutes}:${String(seconds).padStart(2, '0')}`;
+    }, [retryInSeconds]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isLocked) return;
         setError(null);
         setLoading(true);
         try {
             await login(username, password);
-        } catch (err: any) {
-            setError(err.message || "Login failed");
+        } catch (err: unknown) {
+            if (err instanceof ApiError && (err.status === 429 || err.code === 'RATE_LIMIT_EXCEEDED')) {
+                const retryAfter = err.retryAfterSeconds && err.retryAfterSeconds > 0 ? err.retryAfterSeconds : 60;
+                setRetryInSeconds(retryAfter);
+                setError(`Too many failed attempts. Try again in ${retryAfter} seconds.`);
+            } else {
+                setError(getUserErrorMessage(err, 'login'));
+            }
         } finally {
             setLoading(false);
         }
@@ -47,6 +72,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onSwitchToRegister }) 
                     {error && (
                         <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg text-rose-200 text-sm flex items-center gap-2">
                             <Zap className="w-4 h-4" /> {error}
+                        </div>
+                    )}
+                    {isLocked && (
+                        <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-200 text-sm flex items-center justify-between gap-2">
+                            <span>Login is temporarily locked due to rate limiting.</span>
+                            <span className="font-mono tabular-nums text-amber-100">{retryLabel}</span>
                         </div>
                     )}
 
@@ -82,10 +113,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onSwitchToRegister }) 
 
                     <button
                         type="submit"
-                        disabled={loading}
+                        disabled={loading || isLocked}
                         className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed mt-6 group"
                     >
-                        {loading ? 'Authenticating...' : 'Sign In'}
+                        {loading ? 'Authenticating...' : isLocked ? `Retry in ${retryLabel}` : 'Sign In'}
                         {!loading && <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />}
                     </button>
                 </form>

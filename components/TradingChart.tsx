@@ -51,6 +51,23 @@ const TradingChart: React.FC<Props> = ({ symbol, token }) => {
   // Helper: Clean Token
   const cleanToken = (t: string) => t.replace(/['\"]+/g, '');
 
+  const formatHistoryError = (err: unknown): string => {
+    if (axios.isAxiosError(err)) {
+      const status = err.response?.status;
+      const data: any = err.response?.data || {};
+      const backendMsg = data?.error || data?.message || data?.detail;
+
+      if (status === 401) return 'Session expired. Please login again.';
+      if (status === 429) return backendMsg || 'Too many requests. Please wait and retry.';
+      if (status && status >= 500) return 'Server error while loading chart data. Please retry.';
+      if (!status) return 'Network error. Check backend connection and internet.';
+      return backendMsg || `Unable to load chart data (HTTP ${status}).`;
+    }
+
+    if (err instanceof Error) return err.message;
+    return 'Unable to load chart data.';
+  };
+
   // 1. Initialize Chart — reads theme from CSS variables
   useEffect(() => {
     if (!chartContainerRef.current) return;
@@ -109,7 +126,7 @@ const TradingChart: React.FC<Props> = ({ symbol, token }) => {
       setLoading(true); setError(null); lastCandleRef.current = null;
       try {
         const jwtToken = localStorage.getItem('algoTradePro_jwt');
-        if (!jwtToken) { setError("Login Required"); return; }
+        if (!jwtToken) { setError('Login required. Please sign in to continue.'); return; }
 
         const daysToFetch = interval === 'ONE_DAY' ? 365 : 10;
         const cleanSymbol = symbol.replace('.NS', '').replace(/-EQ$|-BE$|-BL$/, '');
@@ -138,9 +155,11 @@ const TradingChart: React.FC<Props> = ({ symbol, token }) => {
             setIsConnected(true);
           }
         } else {
-          setError("No chart data available");
+          setError(`No chart data available for ${cleanSymbol} on selected timeframe.`);
         }
-      } catch (err) { setError("Data Load Failed"); } finally { setLoading(false); }
+      } catch (err) {
+        setError(formatHistoryError(err));
+      } finally { setLoading(false); }
     };
     fetchHistory();
   }, [token, symbol, interval]);

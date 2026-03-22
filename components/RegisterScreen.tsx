@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from './AuthContext';
+import { getUserErrorMessage } from '../services/errorMessages';
 import { Lock, User, Key, Mail, ArrowRight, Activity, Zap } from 'lucide-react';
 
 interface RegisterScreenProps {
@@ -25,10 +26,8 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onSwitchToLogin 
             setTimeout(() => {
                 onSwitchToLogin();
             }, 2000);
-        } catch (err: any) {
-            // Extract error from API response (handled globally by api.ts now)
-            const msg = err.message || "Registration failed";
-            setError(msg);
+        } catch (err: unknown) {
+            setError(getUserErrorMessage(err, 'register'));
         } finally {
             setLoading(false);
         }

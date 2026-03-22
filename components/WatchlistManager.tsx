@@ -135,7 +135,7 @@ const WatchlistManager: React.FC<Props> = ({ onAnalyze, brokerState }) => {
       if (pendingDeletions.includes(activeList)) setActiveList(remaining[0] || 'Default');
       setPendingDeletions([]);
       setIsEditMode(false);
-    } catch (e) { alert("Failed to delete watchlist."); }
+    } catch (e) { alert("Could not delete watchlist. Please retry in a moment."); }
   };
 
   const markForDeletion = (name: string) => { if (name === 'Default') return alert("Cannot delete Default list"); setPendingDeletions(prev => [...prev, name]); };

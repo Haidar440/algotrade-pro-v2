@@ -171,7 +171,10 @@ export class AngelOne {
                 orderid: res.order_id
             };
         } catch (e: any) {
-            return { status: false, message: e.response?.data?.message || "Order failed" };
+            return {
+                status: false,
+                message: e?.message || e?.response?.data?.message || "Order request failed. Please try again."
+            };
         }
     }
 

@@ -8,6 +8,7 @@ import { analyzeStockTicker, fetchMarketIndices } from '../services/gemini';
 import { AutoTrader, AutoTraderConfig } from '../services/autoTrader';
 import { DB_SERVICE } from '../services/db';
 import { secureGet, securePost } from '../services/api';
+import { getUserErrorMessage } from '../services/errorMessages';
 
 // COMPONENTS
 import PaperTradingDashboard from './PaperTradingDashboard';
@@ -312,7 +313,7 @@ const Dashboard: React.FC = () => {
             }
 
             setCurrentView('SCANNER');
-        } catch (err) { setError(err instanceof Error ? err.message : 'Analysis Failed'); }
+        } catch (err: unknown) { setError(getUserErrorMessage(err, 'generic')); }
         finally { clearInterval(interval); setLoading(false); }
     };
 

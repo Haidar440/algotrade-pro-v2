@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { fetchPerformanceAnalytics, PerformanceAnalytics } from '../services/gemini';
+import { getUserErrorMessage } from '../services/errorMessages';
 import {
   BarChart3, TrendingUp, TrendingDown, AlertTriangle, RefreshCw,
   Trophy, Target, Shield, Clock, Zap, DollarSign, Activity
@@ -21,8 +22,8 @@ const AnalyticsDashboard: React.FC = () => {
     try {
       const result = await fetchPerformanceAnalytics();
       setData(result);
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch analytics');
+    } catch (err: unknown) {
+      setError(getUserErrorMessage(err, 'analytics'));
     } finally {
       setLoading(false);
     }

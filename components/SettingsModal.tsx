@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { BrokerState } from '../types';
 import { AngelOne } from '../services/angel';
 import { securePost } from '../services/api';
+import { getUserErrorMessage } from '../services/errorMessages';
 import { X, Save, AlertTriangle, CheckCircle2, Eye, EyeOff, Loader2, RefreshCw } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -50,8 +51,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, brokerSt
       setSuccess("Successfully connected to Angel One!");
       setPin(''); 
       setTotp('');
-    } catch (err: any) {
-      setError(err.message || "Connection Failed. Check credentials.");
+    } catch (err: unknown) {
+      setError(getUserErrorMessage(err, 'broker-connect'));
     } finally {
       setLoading(false);
     }

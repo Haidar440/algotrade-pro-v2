@@ -42,7 +42,7 @@ const ExecutionDashboard: React.FC<ExecutionDashboardProps> = ({ brokerState }) 
       const angel = new AngelOne(brokerState.angel);
       await angel.cancelOrder(orderId);
       setTimeout(fetchData, 1000); 
-    } catch (e) { alert("Failed to cancel order"); }
+      } catch (e) { alert("Could not cancel the order. It may already be executed or cancelled."); }
   };
 
   const pendingStatuses = ['open', 'trigger pending', 'validation pending', 'after market order req received'];

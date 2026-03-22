@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { BacktestResult, BrokerState } from '../types';
 import { secureGet, securePost } from '../services/api';
+import { getUserErrorMessage } from '../services/errorMessages';
 import { PlayCircle, Activity, Loader2, AlertTriangle, Lock, Info, TrendingUp, TrendingDown, Wifi, WifiOff, Database } from 'lucide-react';
 import { INDIAN_STOCKS } from '../services/stockData';
 
@@ -109,8 +110,8 @@ const BacktestDashboard: React.FC<BacktestDashboardProps> = ({ brokerState }) =>
       };
 
       setResult(mappedResult);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Backtest Failed");
+    } catch (err: unknown) {
+      setError(getUserErrorMessage(err, 'backtest'));
     } finally {
       setIsRunning(false);
     }

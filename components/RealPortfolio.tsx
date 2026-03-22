@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { BrokerState, AngelHolding, AngelPosition, AngelOrder, AngelFundDetails } from '../types';
 import { AngelOne } from '../services/angel';
+import { getUserErrorMessage } from '../services/errorMessages';
 import { 
   RefreshCw, Briefcase, Activity, List, Wallet, 
   ArrowUpRight, ArrowDownRight, Search, ChevronLeft, ChevronRight,
@@ -71,9 +72,9 @@ const RealPortfolio: React.FC<RealPortfolioProps> = ({ brokerState }) => {
       setCurrentValue(curr);
       setTotalPnL(curr - invested);
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to fetch broker data", err);
-      setFetchError(err?.message || "Failed to fetch portfolio data. Make sure Angel One is connected.");
+      setFetchError(getUserErrorMessage(err, 'generic'));
     } finally {
       setLoading(false);
     }

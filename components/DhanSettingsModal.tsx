@@ -14,15 +14,30 @@ const DhanSettingsModal: React.FC<DhanSettingsModalProps> = ({ isOpen, onClose, 
   const [clientId, setClientId] = useState(existingCreds?.clientId || '');
   const [accessToken, setAccessToken] = useState(existingCreds?.accessToken || '');
   const [isTesting, setIsTesting] = useState(false);
-  const [status, setStatus] = useState<'IDLE' | 'SUCCESS' | 'ERROR'>('IDLE');
+  const [status, setStatus] = useState<'IDLE' | 'SUCCESS' | 'WARNING' | 'ERROR'>('IDLE');
+  const [statusMessage, setStatusMessage] = useState<string>('');
 
   if (!isOpen) return null;
 
   const handleTestAndSave = async () => {
     setIsTesting(true);
     setStatus('IDLE');
+    setStatusMessage('');
     
     const creds = { clientId, accessToken };
+
+    if (!clientId.trim()) {
+      setStatus('ERROR');
+      setStatusMessage('Client ID is required.');
+      setIsTesting(false);
+      return;
+    }
+    if (!accessToken.trim()) {
+      setStatus('ERROR');
+      setStatusMessage('Access Token is required.');
+      setIsTesting(false);
+      return;
+    }
     
     // In a browser environment without a proxy, this might fail CORS.
     // We will simulate a check or try the real one.
@@ -32,23 +47,33 @@ const DhanSettingsModal: React.FC<DhanSettingsModalProps> = ({ isOpen, onClose, 
         const isValid = await dhan.validate();
         
         if (!isValid) {
-             throw new Error("Validation Failed");
+           throw new Error('Validation failed. Please verify Client ID and Access Token.');
         }
 
-        // Even if CORS fails, if we get here, we save.
         setStatus('SUCCESS');
+        setStatusMessage('Credentials validated and saved successfully.');
         setTimeout(() => {
             onSave(creds);
             onClose();
         }, 1000);
-    } catch (e) {
-        // Assume success for demo if network error (CORS common in local dev)
-        console.warn("Validation failed (likely CORS), saving anyway for demo.");
-        setStatus('SUCCESS');
-        setTimeout(() => {
-            onSave(creds);
-            onClose();
-        }, 1000);
+      } catch (e: any) {
+        const message = e?.message || 'Validation failed due to network/CORS restrictions.';
+        const lowerMessage = String(message).toLowerCase();
+
+        if (lowerMessage.includes('cors') || lowerMessage.includes('network') || lowerMessage.includes('failed to fetch')) {
+          setStatus('WARNING');
+          setStatusMessage('Could not validate with Dhan (likely CORS/network). Credentials were saved locally only.');
+          setTimeout(() => {
+          onSave(creds);
+          onClose();
+          }, 1300);
+          return;
+        }
+
+        setStatus('ERROR');
+        setStatusMessage(message);
+        console.warn('Dhan validation failed:', message);
+        return;
     } finally {
         setIsTesting(false);
     }
@@ -74,6 +99,17 @@ const DhanSettingsModal: React.FC<DhanSettingsModalProps> = ({ isOpen, onClose, 
 
         {/* Body */}
         <div className="p-6 space-y-4">
+          {status !== 'IDLE' && statusMessage && (
+            <div className={`p-3 rounded-lg flex gap-2 text-xs border ${
+              status === 'SUCCESS' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-200' :
+              status === 'WARNING' ? 'bg-amber-500/10 border-amber-500/20 text-amber-200' :
+              'bg-rose-500/10 border-rose-500/20 text-rose-200'
+            }`}>
+              {status === 'ERROR' ? <AlertTriangle className="w-4 h-4 shrink-0" /> : <ShieldCheck className="w-4 h-4 shrink-0" />}
+              <p>{statusMessage}</p>
+            </div>
+          )}
+
           <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex gap-3 text-amber-200 text-xs">
             <AlertTriangle className="w-5 h-5 shrink-0" />
             <p>Your Access Token is stored locally in your browser. Ensure you are on a secure, private network.</p>
@@ -117,13 +153,17 @@ const DhanSettingsModal: React.FC<DhanSettingsModalProps> = ({ isOpen, onClose, 
              onClick={handleTestAndSave}
              disabled={!clientId || !accessToken || isTesting}
              className={`px-6 py-2 rounded-lg text-white font-bold text-sm flex items-center gap-2 transition-all ${
-               status === 'SUCCESS' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-[#5e35b1] hover:bg-[#4527a0]'
+               status === 'SUCCESS' ? 'bg-emerald-500 hover:bg-emerald-600' :
+               status === 'WARNING' ? 'bg-amber-500 hover:bg-amber-600 text-slate-900' :
+               'bg-[#5e35b1] hover:bg-[#4527a0]'
              } disabled:opacity-50 disabled:cursor-not-allowed`}
            >
              {isTesting ? (
                <>Connecting...</>
              ) : status === 'SUCCESS' ? (
                <><ShieldCheck className="w-4 h-4" /> Connected</>
+             ) : status === 'WARNING' ? (
+               <><ShieldCheck className="w-4 h-4" /> Saved (Unverified)</>
              ) : (
                <><Lock className="w-4 h-4" /> Save & Connect</>
              )}

@@ -7,7 +7,34 @@
 
 const API_BASE = "http://localhost:8000/api";
 
+export class ApiError extends Error {
+    status: number;
+    code?: string;
+    retryAfterSeconds?: number;
+
+    constructor(message: string, status: number, code?: string, retryAfterSeconds?: number) {
+        super(message);
+        this.name = "ApiError";
+        this.status = status;
+        this.code = code;
+        this.retryAfterSeconds = retryAfterSeconds;
+    }
+}
+
 const getToken = (): string | null => localStorage.getItem("algoTradePro_jwt");
+
+const isAuthPath = (path: string): boolean => {
+    const normalized = path.toLowerCase();
+    return normalized.startsWith("/auth/login") || normalized.startsWith("/auth/register") || normalized.startsWith("/auth/token");
+};
+
+const shouldAutoLogoutOn401 = (path: string, token: string | null): boolean => {
+    // Never force logout for auth endpoints (e.g. wrong password on login).
+    if (isAuthPath(path)) return false;
+    // If no token exists, this is not a session-expiry case.
+    if (!token) return false;
+    return true;
+};
 
 /**
  * Handle 401 Unauthorized — clear stored JWT and dispatch logout event.
@@ -36,11 +63,17 @@ export async function secureGet(path: string): Promise<any> {
         },
     });
 
-    if (res.status === 401) handle401();
+    if (res.status === 401 && shouldAutoLogoutOn401(path, token)) handle401();
 
     if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || body.message || `API error ${res.status}`);
+        const retryAfter = Number(res.headers.get("Retry-After") || "0");
+        throw new ApiError(
+            body.detail || body.message || body.error || `API error ${res.status}`,
+            res.status,
+            body.error_code,
+            Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : undefined
+        );
     }
 
     const json = await res.json();
@@ -58,11 +91,17 @@ export async function securePost(path: string, body?: any): Promise<any> {
         body: body ? JSON.stringify(body) : undefined,
     });
 
-    if (res.status === 401) handle401();
+    if (res.status === 401 && shouldAutoLogoutOn401(path, token)) handle401();
 
     if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || data.message || `API error ${res.status}`);
+        const retryAfter = Number(res.headers.get("Retry-After") || "0");
+        throw new ApiError(
+            data.detail || data.message || data.error || `API error ${res.status}`,
+            res.status,
+            data.error_code,
+            Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : undefined
+        );
     }
 
     const json = await res.json();
@@ -79,11 +118,17 @@ export async function secureDelete(path: string): Promise<any> {
         },
     });
 
-    if (res.status === 401) handle401();
+    if (res.status === 401 && shouldAutoLogoutOn401(path, token)) handle401();
 
     if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || data.message || `API error ${res.status}`);
+        const retryAfter = Number(res.headers.get("Retry-After") || "0");
+        throw new ApiError(
+            data.detail || data.message || data.error || `API error ${res.status}`,
+            res.status,
+            data.error_code,
+            Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : undefined
+        );
     }
 
     const json = await res.json();
@@ -101,11 +146,17 @@ export async function securePut(path: string, body?: any): Promise<any> {
         body: body ? JSON.stringify(body) : undefined,
     });
 
-    if (res.status === 401) handle401();
+    if (res.status === 401 && shouldAutoLogoutOn401(path, token)) handle401();
 
     if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || data.message || `API error ${res.status}`);
+        const retryAfter = Number(res.headers.get("Retry-After") || "0");
+        throw new ApiError(
+            data.detail || data.message || data.error || `API error ${res.status}`,
+            res.status,
+            data.error_code,
+            Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : undefined
+        );
     }
 
     const json = await res.json();

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { analyzeStockNews } from '../services/gemini';
 import { NewsAnalysisResult } from '../types';
+import { getUserErrorMessage } from '../services/errorMessages';
 import { 
   Search, TrendingUp, TrendingDown, ExternalLink, Loader2, Newspaper, 
   AlertTriangle, Zap, BarChart2, CheckCircle2, Globe, ShieldCheck, ArrowRight
@@ -28,8 +29,8 @@ const NewsAnalysisDashboard: React.FC<NewsAnalysisDashboardProps> = ({ initialSy
     try {
       const data = await analyzeStockNews(searchTerm);
       setResult(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch news analysis.');
+    } catch (err: unknown) {
+      setError(getUserErrorMessage(err, 'news'));
     } finally {
       setLoading(false);
     }

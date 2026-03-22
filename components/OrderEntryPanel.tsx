@@ -35,6 +35,23 @@ const OrderEntryPanel: React.FC<Props> = ({ symbol, token, ltp, onClose }) => {
     validateInputs();
   }, [quantity, price, orderType, transactionType, ltp]);
 
+  const normalizeOrderError = (rawMessage: string): string => {
+      const message = (rawMessage || '').trim();
+      const lower = message.toLowerCase();
+
+      if (!message || lower === 'order failed') return 'Order request failed. Please retry.';
+      if (lower.includes('unauthorized') || lower.includes('login') || lower.includes('session expired')) {
+          return 'Broker session expired. Please reconnect Angel One in Settings.';
+      }
+      if (lower.includes('too many requests') || lower.includes('rate limit')) {
+          return 'Rate limit hit. Wait a moment and place the order again.';
+      }
+      if (lower.includes('cautionary listings') || lower.includes('gsm') || lower.includes('asm')) {
+          return 'Blocked: stock is under ASM/GSM surveillance.';
+      }
+      return message;
+  };
+
   const validateInputs = () => {
       setValidationError(null);
       setWarningMsg(null);
@@ -99,14 +116,8 @@ const OrderEntryPanel: React.FC<Props> = ({ symbol, token, ltp, onClose }) => {
 
     } catch (e: any) {
         setStatus('ERROR');
-        const errorMsg = e.message || "Order Failed";
-        
-        // Handle blocked scrips gracefully
-        if (errorMsg.includes("cautionary listings") || errorMsg.includes("GSM") || errorMsg.includes("ASM")) {
-             setMsg("⚠️ Blocked: Stock is under ASM/GSM Surveillance.");
-        } else {
-             setMsg(errorMsg);
-        }
+           const errorMsg = e?.message || 'Order failed';
+           setMsg(normalizeOrderError(errorMsg));
     }
   };
 
