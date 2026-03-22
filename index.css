@@ -1,37 +1,661 @@
 @import "tailwindcss";
 
-/* ━━━ AlgoTrade Pro — Global Design Tokens ━━━ */
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   AlgoTrade Pro — Complete Theme System
+   DEFAULT = Device/System auto (follows OS preference)
+   .force-light = Force light override
+   .force-dark  = Force dark override
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* ── BASE: Light variables ── */
 :root {
-  --bg-base: #06080f;
-  --bg-card: #0c1120;
-  --bg-elevated: #111827;
-  --border-subtle: rgba(255, 255, 255, 0.04);
-  --border-default: rgba(255, 255, 255, 0.06);
-  --text-primary: #f1f5f9;
+  --bg: #f5f6f8;
+  --bg-sidebar: #ffffff;
+  --bg-card: #ffffff;
+  --bg-elevated: #f0f2f5;
+  --bg-inset: #e8ebf0;
+  --bg-hover: #f0f2f5;
+  --border: #e2e5ea;
+  --border-hover: #d0d4db;
+  --text: #1b1f28;
+  --text-secondary: #5a6070;
+  --text-muted: #8c94a5;
+  --accent-green: #0d9f40;
+  --accent-red: #d92b2b;
+  --accent-blue: #1a73e8;
+  --accent-amber: #e67e00;
+  --accent-cyan: #0c8789;
+  --accent-purple: #7c3aed;
+  --ring-green: rgba(13, 159, 64, 0.08);
+  --ring-red: rgba(217, 43, 43, 0.08);
+  --ring-blue: rgba(26, 115, 232, 0.08);
+  --ring-purple: rgba(124, 58, 237, 0.08);
+  --ring-amber: rgba(230, 126, 0, 0.08);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --chart-bg: #ffffff;
+  --chart-grid: #edf0f4;
+  --chart-text: #6b7280;
+  --visual-chart-bg: #f0f3f8;
+  --sidebar-active-bg: #1a73e8;
+  --sidebar-text: #444b5a;
+  --sidebar-hover: #f0f2f5;
+}
+
+/* ── DEVICE AUTO: OS dark → apply dark vars (unless user forced light) ── */
+@media (prefers-color-scheme: dark) {
+  :root:not(.force-light) {
+    --bg: #0a0e1a;
+    --bg-sidebar: #0c1120;
+    --bg-card: #111827;
+    --bg-elevated: #1a2035;
+    --bg-inset: rgba(0, 0, 0, 0.25);
+    --bg-hover: rgba(255, 255, 255, 0.04);
+    --border: rgba(255, 255, 255, 0.08);
+    --border-hover: rgba(255, 255, 255, 0.14);
+    --text: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent-green: #10b981;
+    --accent-red: #ef4444;
+    --accent-blue: #3b82f6;
+    --accent-amber: #f59e0b;
+    --accent-cyan: #22d3ee;
+    --accent-purple: #a78bfa;
+    --ring-green: rgba(16, 185, 129, 0.18);
+    --ring-red: rgba(239, 68, 68, 0.18);
+    --ring-blue: rgba(59, 130, 246, 0.15);
+    --ring-purple: rgba(167, 139, 250, 0.15);
+    --ring-amber: rgba(245, 158, 11, 0.15);
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --chart-bg: #0c1120;
+    --chart-grid: #1e293b;
+    --chart-text: #94a3b8;
+    --visual-chart-bg: #0b1120;
+    --sidebar-active-bg: #3b82f6;
+    --sidebar-text: #94a3b8;
+    --sidebar-hover: rgba(255, 255, 255, 0.04);
+  }
+}
+
+/* ── FORCE DARK: manual override regardless of OS ── */
+.force-dark {
+  --bg: #0a0e1a;
+  --bg-sidebar: #0c1120;
+  --bg-card: #111827;
+  --bg-elevated: #1a2035;
+  --bg-inset: rgba(0, 0, 0, 0.25);
+  --bg-hover: rgba(255, 255, 255, 0.04);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.14);
+  --text: #f1f5f9;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
   --accent-green: #10b981;
   --accent-red: #ef4444;
   --accent-blue: #3b82f6;
+  --accent-amber: #f59e0b;
+  --accent-cyan: #22d3ee;
+  --accent-purple: #a78bfa;
+  --ring-green: rgba(16, 185, 129, 0.18);
+  --ring-red: rgba(239, 68, 68, 0.18);
+  --ring-blue: rgba(59, 130, 246, 0.15);
+  --ring-purple: rgba(167, 139, 250, 0.15);
+  --ring-amber: rgba(245, 158, 11, 0.15);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --chart-bg: #0c1120;
+  --chart-grid: #1e293b;
+  --chart-text: #94a3b8;
+  --visual-chart-bg: #0b1120;
+  --sidebar-active-bg: #3b82f6;
+  --sidebar-text: #94a3b8;
+  --sidebar-hover: rgba(255, 255, 255, 0.04);
 }
 
+/* ── FORCE LIGHT: manual override (beats @media query) ── */
+.force-light {
+  --bg: #f5f6f8;
+  --bg-sidebar: #ffffff;
+  --bg-card: #ffffff;
+  --bg-elevated: #f0f2f5;
+  --bg-inset: #e8ebf0;
+  --bg-hover: #f0f2f5;
+  --border: #e2e5ea;
+  --border-hover: #d0d4db;
+  --text: #1b1f28;
+  --text-secondary: #5a6070;
+  --text-muted: #8c94a5;
+  --accent-green: #0d9f40;
+  --accent-red: #d92b2b;
+  --accent-blue: #1a73e8;
+  --accent-amber: #e67e00;
+  --accent-cyan: #0c8789;
+  --accent-purple: #7c3aed;
+  --ring-green: rgba(13, 159, 64, 0.08);
+  --ring-red: rgba(217, 43, 43, 0.08);
+  --ring-blue: rgba(26, 115, 232, 0.08);
+  --ring-purple: rgba(124, 58, 237, 0.08);
+  --ring-amber: rgba(230, 126, 0, 0.08);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --chart-bg: #ffffff;
+  --chart-grid: #edf0f4;
+  --chart-text: #6b7280;
+  --visual-chart-bg: #f0f3f8;
+  --sidebar-active-bg: #1a73e8;
+  --sidebar-text: #444b5a;
+  --sidebar-hover: #f0f2f5;
+}
+
+/* ━━━ Base Styles ━━━ */
 body {
   margin: 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-family: 'Google Sans Text', 'Google Sans', 'Product Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--bg-base);
-  color: var(--text-primary);
-  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  background-color: var(--bg);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum', 'cv02', 'cv03', 'cv04', 'cv11';
+  font-size: 14px;
+  line-height: 1.6;
+  letter-spacing: -0.01em;
+  font-weight: 400;
 }
 
-/* ━━━ Tabular Numbers — Zero Jitter for Financial Data ━━━ */
+/* ── Google Sans Typography Scale ── */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: 'Google Sans', 'Product Sans', -apple-system, system-ui, sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  margin: 0;
+}
+
+h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+h2 {
+  font-size: 1.375rem;
+  font-weight: 700;
+}
+
+h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+h4 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+p {
+  line-height: 1.65;
+  margin: 0;
+}
+
+small,
+.text-xs {
+  font-size: 0.75rem;
+  letter-spacing: 0;
+}
+
+.text-sm {
+  font-size: 0.8125rem;
+}
+
+.text-base {
+  font-size: 0.875rem;
+}
+
+.text-lg {
+  font-size: 1.0625rem;
+}
+
+.text-xl {
+  font-size: 1.25rem;
+  letter-spacing: -0.01em;
+}
+
+.text-2xl {
+  font-size: 1.5rem;
+  letter-spacing: -0.02em;
+}
+
+.text-3xl {
+  font-size: 1.875rem;
+  letter-spacing: -0.025em;
+}
+
+.text-4xl {
+  font-size: 2.25rem;
+  letter-spacing: -0.03em;
+}
+
+/* ── Font weight utilities ── */
+.font-medium {
+  font-weight: 500;
+}
+
+.font-semibold {
+  font-weight: 600;
+}
+
+.font-bold {
+  font-weight: 700;
+}
+
+.font-black {
+  font-weight: 700;
+}
+
+/* ── Button text ── */
+button,
+[type="button"],
+[type="submit"] {
+  font-family: 'Google Sans', 'Product Sans', -apple-system, system-ui, sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+/* ── Labels & captions ── */
+label,
+.uppercase {
+  font-family: 'Google Sans Text', 'Google Sans', system-ui, sans-serif;
+  letter-spacing: 0.04em;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   GLOBAL COLOR OVERRIDES
+   Remaps ALL hardcoded Tailwind dark classes to CSS variables.
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* ── BACKGROUNDS: Hex values ── */
+.bg-\[\#0f172a\],
+.bg-\[\#0f172a\]\/80,
+.bg-\[\#0b1120\],
+.bg-\[\#0b1120\]\/80,
+.bg-\[\#0c1120\],
+.bg-\[\#06080f\] {
+  background-color: var(--bg-sidebar) !important;
+}
+
+.bg-\[\#1e293b\] {
+  background-color: var(--bg-card) !important;
+}
+
+/* ── BACKGROUNDS: Slate scale ── */
+.bg-slate-950 {
+  background-color: var(--bg) !important;
+}
+
+.bg-slate-900,
+.bg-slate-900\/50,
+.bg-slate-900\/40,
+.bg-slate-900\/30 {
+  background-color: var(--bg) !important;
+}
+
+.bg-slate-800,
+.bg-slate-800\/80,
+.bg-slate-800\/50,
+.bg-slate-800\/30,
+.bg-slate-800\/20 {
+  background-color: var(--bg-card) !important;
+}
+
+.bg-slate-700,
+.bg-slate-700\/50,
+.bg-slate-700\/30 {
+  background-color: var(--bg-elevated) !important;
+}
+
+.bg-slate-600 {
+  background-color: var(--bg-elevated) !important;
+}
+
+.bg-black\/60,
+.bg-black\/50,
+.bg-black\/40,
+.bg-black\/30,
+.bg-black\/20 {
+  background-color: var(--bg-inset) !important;
+}
+
+/* ── TEXT ── */
+.text-white {
+  color: var(--text) !important;
+}
+
+.text-slate-100,
+.text-slate-200,
+.text-slate-300 {
+  color: var(--text) !important;
+}
+
+.text-slate-400 {
+  color: var(--text-secondary) !important;
+}
+
+.text-slate-500 {
+  color: var(--text-muted) !important;
+}
+
+.text-slate-600 {
+  color: var(--text-muted) !important;
+}
+
+.text-slate-700 {
+  color: var(--text-muted) !important;
+}
+
+.text-emerald-400,
+.text-emerald-500,
+.text-emerald-600 {
+  color: var(--accent-green) !important;
+}
+
+.text-rose-100,
+.text-rose-200,
+.text-rose-300,
+.text-rose-400 {
+  color: var(--accent-red) !important;
+}
+
+.text-red-400,
+.text-red-500 {
+  color: var(--accent-red) !important;
+}
+
+.text-blue-300,
+.text-blue-400,
+.text-blue-500 {
+  color: var(--accent-blue) !important;
+}
+
+.text-amber-300,
+.text-amber-400,
+.text-amber-500 {
+  color: var(--accent-amber) !important;
+}
+
+.text-cyan-300,
+.text-cyan-400 {
+  color: var(--accent-cyan) !important;
+}
+
+.text-purple-300,
+.text-purple-400 {
+  color: var(--accent-purple) !important;
+}
+
+/* ── BORDERS ── */
+.border-slate-300,
+.border-slate-600,
+.border-slate-700,
+.border-slate-700\/50,
+.border-slate-800,
+.border-slate-800\/50,
+.border-slate-800\/30,
+.border-white\/\[0\.04\],
+.border-white\/\[0\.06\],
+.border-white\/40 {
+  border-color: var(--border) !important;
+}
+
+.border-emerald-500\/30,
+.border-emerald-500\/20,
+.border-emerald-500\/50,
+.border-emerald-400 {
+  border-color: var(--accent-green) !important;
+  opacity: 0.85;
+}
+
+.border-rose-500\/30,
+.border-rose-500\/20,
+.border-rose-400 {
+  border-color: var(--accent-red) !important;
+  opacity: 0.85;
+}
+
+.border-blue-500\/30,
+.border-blue-500\/50 {
+  border-color: var(--accent-blue) !important;
+  opacity: 0.85;
+}
+
+.border-purple-500\/30 {
+  border-color: var(--accent-purple) !important;
+  opacity: 0.85;
+}
+
+/* ── HOVER STATES ── */
+.hover\:bg-slate-800:hover,
+.hover\:bg-slate-800\/50:hover,
+.hover\:bg-slate-700:hover,
+.hover\:bg-slate-700\/50:hover {
+  background-color: var(--bg-hover) !important;
+}
+
+.hover\:text-white:hover,
+.hover\:text-slate-200:hover,
+.hover\:text-slate-300:hover {
+  color: var(--text) !important;
+}
+
+.hover\:text-emerald-400:hover {
+  color: var(--accent-green) !important;
+}
+
+.hover\:text-rose-400:hover,
+.hover\:text-rose-300:hover {
+  color: var(--accent-red) !important;
+}
+
+.hover\:text-blue-400:hover {
+  color: var(--accent-blue) !important;
+}
+
+.hover\:text-amber-400:hover {
+  color: var(--accent-amber) !important;
+}
+
+.hover\:text-cyan-400:hover {
+  color: var(--accent-cyan) !important;
+}
+
+.hover\:text-purple-400:hover {
+  color: var(--accent-purple) !important;
+}
+
+.hover\:bg-emerald-500\/30:hover,
+.hover\:bg-emerald-500\/20:hover {
+  background-color: var(--ring-green) !important;
+}
+
+.hover\:bg-rose-500\/30:hover {
+  background-color: var(--ring-red) !important;
+}
+
+.hover\:bg-blue-600\/30:hover {
+  background-color: var(--ring-blue) !important;
+}
+
+/* ── ACCENT BACKGROUNDS ── */
+.bg-emerald-500\/10,
+.bg-emerald-500\/20,
+.bg-emerald-500\/5 {
+  background-color: var(--ring-green) !important;
+}
+
+.bg-rose-500\/10,
+.bg-rose-500\/5,
+.bg-rose-500\/20 {
+  background-color: var(--ring-red) !important;
+}
+
+.bg-blue-500\/10,
+.bg-blue-600\/20,
+.bg-blue-600\/10,
+.bg-blue-500\/5 {
+  background-color: var(--ring-blue) !important;
+}
+
+.bg-cyan-500\/10,
+.bg-cyan-500\/20 {
+  background-color: var(--ring-blue) !important;
+}
+
+.bg-amber-500\/20,
+.bg-amber-500\/10 {
+  background-color: var(--ring-amber) !important;
+}
+
+.bg-purple-500\/10,
+.bg-purple-600\/10,
+.bg-purple-900\/10 {
+  background-color: var(--ring-purple) !important;
+}
+
+/* ── SIDEBAR ACTIVE COLOR ── */
+.bg-emerald-500 {
+  background-color: var(--sidebar-active-bg) !important;
+}
+
+.bg-amber-600 {
+  background-color: var(--accent-amber) !important;
+}
+
+.bg-blue-600 {
+  background-color: var(--accent-blue) !important;
+}
+
+.bg-purple-600 {
+  background-color: var(--accent-purple) !important;
+}
+
+.bg-cyan-600 {
+  background-color: var(--accent-cyan) !important;
+}
+
+/* ── SHADOWS ── */
+.shadow-emerald-900\/40,
+.shadow-blue-900\/40,
+.shadow-blue-900\/20,
+.shadow-purple-900\/40,
+.shadow-purple-900\/30,
+.shadow-amber-900\/40,
+.shadow-cyan-900\/30,
+.shadow-purple-500\/20,
+.shadow-emerald-500\/20,
+.shadow-emerald-900\/30 {
+  box-shadow: var(--shadow-lg) !important;
+}
+
+/* ── GRADIENT TEXT ── */
+.from-white {
+  --tw-gradient-from: var(--text) !important;
+}
+
+.to-slate-400 {
+  --tw-gradient-to: var(--text-secondary) !important;
+}
+
+.from-purple-900\/10 {
+  --tw-gradient-from: var(--ring-purple) !important;
+}
+
+.to-slate-900 {
+  --tw-gradient-to: var(--bg) !important;
+}
+
+/* ── INPUT & FORMS ── */
+input,
+textarea,
+select {
+  background-color: var(--bg-inset) !important;
+  border-color: var(--border) !important;
+  color: var(--text) !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted) !important;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--accent-blue) !important;
+}
+
+/* ── GLASS PANEL ── */
+.glass-panel {
+  background: var(--bg-card) !important;
+  border-color: var(--border) !important;
+  box-shadow: var(--shadow) !important;
+}
+
+/* ── RECHARTS ── */
+.recharts-cartesian-grid line {
+  stroke: var(--chart-grid) !important;
+}
+
+.recharts-xAxis line,
+.recharts-yAxis line {
+  stroke: var(--border) !important;
+}
+
+.recharts-text {
+  fill: var(--text-muted) !important;
+}
+
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: var(--bg-card) !important;
+  border-color: var(--border) !important;
+}
+
+/* ━━━━ UTILITIES ━━━━ */
+.font-mono {
+  font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+}
+
 .tabular-nums {
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum';
 }
 
-/* ━━━ Scrollbar — Minimal ━━━ */
+/* ━━━━ SCROLLBAR ━━━━ */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: 3px;
+  opacity: 0.3;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  opacity: 0.6;
+}
+
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
@@ -41,7 +665,6 @@ body {
   scrollbar-width: none;
 }
 
-/* ━━━ No-Scrollbar utility ━━━ */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -49,4 +672,64 @@ body {
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* ━━━━ PRICE FLASH ━━━━ */
+@keyframes flashUp {
+  0% {
+    background-color: var(--ring-green);
+  }
+
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes flashDown {
+  0% {
+    background-color: var(--ring-red);
+  }
+
+  100% {
+    background-color: transparent;
+  }
+}
+
+.flash-up {
+  animation: flashUp 0.8s ease-out forwards;
+}
+
+.flash-down {
+  animation: flashDown 0.8s ease-out forwards;
+}
+
+/* ━━━━ RESPONSIVE FONT SCALE ━━━━ */
+@media (max-width: 640px) {
+  body {
+    font-size: 13px;
+  }
+
+  h1 {
+    font-size: 1.375rem;
+  }
+
+  h2 {
+    font-size: 1.125rem;
+  }
+
+  h3 {
+    font-size: 1rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  body {
+    font-size: 14.5px;
+  }
+}
+
+@media (min-width: 1440px) {
+  body {
+    font-size: 15px;
+  }
 }
