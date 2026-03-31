@@ -75,8 +75,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onSelectView, isOpen, onC
           <button
             onClick={() => { onSelectView('SCANNER'); onClose(); }}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-bold ${activeView === 'SCANNER'
-                ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-900/40'
-                : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+              ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-900/40'
+              : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
               }`}
           >
             <LayoutDashboard className="w-5 h-5" /> Market Scanner
@@ -88,8 +88,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onSelectView, isOpen, onC
           <button
             onClick={() => { onSelectView('AUTO_TRADER'); onClose(); }}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeView === 'AUTO_TRADER'
-                ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/40'
-                : 'text-slate-400 hover:bg-slate-800 hover:text-amber-400'
+              ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/40'
+              : 'text-slate-400 hover:bg-slate-800 hover:text-amber-400'
               }`}
           >
             <Bot className="w-5 h-5" /> Auto-Bot
@@ -100,8 +100,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onSelectView, isOpen, onC
           <button
             onClick={() => { onSelectView('REAL_PORTFOLIO'); onClose(); }}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeView === 'REAL_PORTFOLIO'
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40'
-                : 'text-slate-400 hover:bg-slate-800 hover:text-blue-400'
+              ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40'
+              : 'text-slate-400 hover:bg-slate-800 hover:text-blue-400'
               }`}
           >
             <Briefcase className="w-5 h-5" /> Real Portfolio
@@ -112,8 +112,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onSelectView, isOpen, onC
           <button
             onClick={() => { onSelectView('PAPER_TRADING'); onClose(); }}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeView === 'PAPER_TRADING'
-                ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/40'
-                : 'text-slate-400 hover:bg-slate-800 hover:text-purple-400'
+              ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/40'
+              : 'text-slate-400 hover:bg-slate-800 hover:text-purple-400'
               }`}
           >
             <FileText className="w-5 h-5" /> Paper Simulator
@@ -121,8 +121,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onSelectView, isOpen, onC
           <button
             onClick={() => { onSelectView('TRADE_HISTORY'); onClose(); }}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeView === 'TRADE_HISTORY'
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
-                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+              ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
+              : 'text-slate-400 hover:bg-slate-800 hover:text-white'
               }`}
           >
             <Calendar className="w-5 h-5" />
@@ -166,6 +166,16 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onSelectView, isOpen, onC
               }`}
           >
             <BarChart3 className="w-5 h-5" /> Analytics
+          </button>
+
+          {/* Multi-LLM Intelligence */}
+          <button
+            onClick={() => { onSelectView('INTELLIGENCE'); onClose(); }}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeView === 'INTELLIGENCE' ? 'bg-violet-600 text-white shadow-lg shadow-violet-900/30' : 'text-slate-400 hover:bg-slate-800 hover:text-violet-400'
+              }`}
+          >
+            <BarChart3 className="w-5 h-5" /> Multi-LLM Intel
+            <span className="ml-auto text-[9px] bg-violet-500/20 text-violet-300 px-1.5 py-0.5 rounded uppercase font-bold">New</span>
           </button>
 
           {/* News */}

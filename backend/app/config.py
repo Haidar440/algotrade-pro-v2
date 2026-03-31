@@ -91,6 +91,47 @@ class Settings(BaseSettings):
         description="Max % of portfolio in a single position",
     )
 
+    # ━━━━ Multi-LLM Providers (Sprint 6 — all optional) ━━━━
+    GROQ_API_KEY: Optional[str] = Field(default=None, description="Groq API key for Llama models")
+    TOGETHER_API_KEY: Optional[str] = Field(default=None, description="Together AI API key")
+    OLLAMA_BASE_URL: str = Field(
+        default="http://localhost:11434",
+        description="Ollama local server URL",
+    )
+    ALPHA_VANTAGE_KEY: Optional[str] = Field(
+        default=None, description="Alpha Vantage API key for sentiment data"
+    )
+
+    # ━━━━ Intelligence System Config ━━━━
+    LLM_NEWS_PROVIDER: str = Field(
+        default="auto",
+        description="LLM provider for news analysis: auto|groq|gemini|together|ollama",
+    )
+    LLM_MARKET_PROVIDER: str = Field(
+        default="auto",
+        description="LLM provider for market analysis: auto|gemini|groq|together",
+    )
+    LLM_REASONING_PROVIDER: str = Field(
+        default="auto",
+        description="LLM provider for reasoning engine: auto|gemini|groq",
+    )
+    LLM_SELECTOR_PROVIDER: str = Field(
+        default="auto",
+        description="LLM provider for stock selector: auto|gemini|groq",
+    )
+    INTELLIGENCE_MAX_STOCKS: int = Field(
+        default=20, ge=5, le=50,
+        description="Max stocks to pass to LLM after rule-based filter",
+    )
+    INTELLIGENCE_CACHE_TTL: int = Field(
+        default=900, ge=60, le=3600,
+        description="Intelligence report cache TTL in seconds (default 15 min)",
+    )
+    INTELLIGENCE_MAX_CONCURRENT: int = Field(
+        default=3, ge=1, le=10,
+        description="Max concurrent intelligence scans (backpressure limit)",
+    )
+
     # ━━━━━━━━━━━━━━━ Validators ━━━━━━━━━━━━━━━
 
     @field_validator("JWT_SECRET_KEY")

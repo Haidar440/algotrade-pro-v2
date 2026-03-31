@@ -18,19 +18,20 @@ export interface Trade {
   stopLoss?: number;
 }
 // Split PORTFOLIO into REAL_PORTFOLIO and PAPER_TRADING
-export type View = 
-  | 'SCANNER' 
-  | 'WATCHLIST' 
-  | 'REAL_PORTFOLIO' 
-  | 'PAPER_TRADING' 
+export type View =
+  | 'SCANNER'
+  | 'WATCHLIST'
+  | 'REAL_PORTFOLIO'
+  | 'PAPER_TRADING'
   | 'AUTO_TRADER'
   | 'TRADE_HISTORY'
-  | 'BACKTEST' 
-  | 'STRATEGIES' 
-  | 'PYTHON_LAB' 
+  | 'BACKTEST'
+  | 'STRATEGIES'
+  | 'PYTHON_LAB'
   | 'NEWS'
   | 'AI_PICKS'
-  | 'ANALYTICS';
+  | 'ANALYTICS'
+  | 'INTELLIGENCE';
 export interface Stock {
   symbol: string;
   name: string;
@@ -209,13 +210,13 @@ export interface AngelOrderParams {
   duration: 'DAY' | 'IOC';
   price: string;
   quantity: string;
-  
+
   // SmartAPI Specific Fields
   triggerprice?: string; // Required for STOPLOSS
   squareoff?: string;    // Required for ROBO (Target)
   stoploss?: string;     // Required for ROBO (SL)
   trailingStopLoss?: string; // Optional for ROBO
-  
+
   orderid?: string;      // Required for Modify/Cancel
 }
 

@@ -51,3 +51,14 @@ tradingview-screener>=3.0.0
 
 # ── Logging ──
 python-json-logger==3.2.0
+
+# ── Multi-LLM Intelligence (Sprint 6) ──
+groq>=0.9.0
+together>=1.0.0
+lightgbm>=4.0.0
+scikit-learn>=1.4.0
+duckduckgo-search>=6.0.0
+newspaper3k>=0.2.8
+feedparser>=6.0.0
+apscheduler>=3.10.0
+

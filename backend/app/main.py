@@ -23,7 +23,7 @@ from app.config import settings
 from app.database import close_db, init_db
 from app.logging_config import setup_logging
 from app.middleware import setup_exception_handlers, setup_middleware
-from app.routers import ai, auth, backtest, broker, health, telegram, trades, watchlists, websocket
+from app.routers import ai, auth, backtest, broker, health, intelligence, telegram, trades, watchlists, websocket
 from app.services.telegram_bot import telegram_bot
 
 logger = logging.getLogger(__name__)
@@ -57,6 +57,14 @@ async def lifespan(app: FastAPI):
     else:
         # No webhook → start long-polling for local dev
         telegram_bot.start_polling()
+
+    # Initialize Multi-LLM Intelligence System (Sprint 6)
+    try:
+        from app.routers.intelligence import setup_intelligence
+        await setup_intelligence()
+        logger.info("🧠 Intelligence system initialized")
+    except Exception as e:
+        logger.warning("Intelligence system startup failed (non-critical): %s", str(e)[:200])
 
     logger.info("🚀 Application ready — accepting requests")
 
@@ -99,6 +107,7 @@ app.include_router(ai.router)
 app.include_router(backtest.router)
 app.include_router(telegram.router)
 app.include_router(websocket.router)
+app.include_router(intelligence.router)
 
 
 # ━━━━━━━━━━━━━━━ Root ━━━━━━━━━━━━━━━

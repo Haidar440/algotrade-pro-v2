@@ -30,6 +30,7 @@ import WatchlistManager from './WatchlistManager';
 import TradingViewTicker from './TradingViewTicker';
 import AiPicksDashboard from './AiPicksDashboard';
 import AnalyticsDashboard from './AnalyticsDashboard';
+import IntelligenceDashboard from './IntelligenceDashboard';
 import {
     Activity, Search, AlertTriangle, Filter, RefreshCw, Lock, Zap, Briefcase, Bot
 } from 'lucide-react';
@@ -264,7 +265,7 @@ const Dashboard: React.FC = () => {
                             name: item.name || (item.symbol || '').replace('-EQ', ''),
                         }))
                         .slice(0, 15);
-                    
+
                     if (cleaned.length > 0) {
                         // Merge: local matches first, then DB results (deduplicated)
                         const seen = new Set(localMatches.map(s => s.symbol));
@@ -475,6 +476,7 @@ const Dashboard: React.FC = () => {
                         {currentView === 'PYTHON_LAB' && <div className="h-full"><PythonLab data={result} brokerState={brokerState} /></div>}
                         {currentView === 'AI_PICKS' && <AiPicksDashboard />}
                         {currentView === 'ANALYTICS' && <AnalyticsDashboard />}
+                        {currentView === 'INTELLIGENCE' && <div className="animate-in fade-in slide-in-from-bottom-4 duration-500"><IntelligenceDashboard /></div>}
                     </div>
                 </main>
 
