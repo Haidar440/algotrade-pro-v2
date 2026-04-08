@@ -32,6 +32,7 @@ from app.services.ai_engine import AIEngine, StockAnalysisInput
 from app.services.analytics import PerformanceAnalytics, TradeRecord
 from app.services.data_provider import DataProvider
 from app.services.gemini_news import GeminiNewsService
+from app.services.news_aggregator import news_aggregator
 from app.services.stock_picker import StockPicker
 from app.services.swing_screener import SwingScreener
 from app.services.technical import TechnicalAnalyzer
@@ -402,59 +403,58 @@ async def predict_stock(
 
 
 @router.get(
+    "/news/market-mood",
+    summary="Market Mood",
+    description="Get overall stock market sentiment from aggregated news sources.",
+)
+async def get_market_mood(
+    user: dict = Depends(get_current_user),
+):
+    """Get overall market sentiment score from multiple news sources."""
+    mood = await news_aggregator.get_market_mood()
+    return ApiResponse(data=mood, message="Market mood")
+
+
+@router.get(
     "/news/{symbol}",
     response_model=ApiResponse[NewsSearchSchema],
     summary="Stock News Intelligence",
-    description="Get latest stock news with AI sentiment analysis powered by Gemini + Google Search.",
+    description="Multi-source stock news with sentiment analysis (yfinance + GNews + RSS).",
 )
 async def get_stock_news(
     symbol: str,
-    with_sentiment: bool = Query(default=False, description="Include AI sentiment analysis (always true with Gemini)"),
+    with_sentiment: bool = Query(default=False, description="Include AI sentiment analysis"),
     user: dict = Depends(get_current_user),
 ) -> ApiResponse[NewsSearchSchema]:
-    """Get real-time stock news intelligence using Gemini + Google Search.
+    """Get stock news from multiple web sources.
 
-    Gemini searches Google for latest news, analyzes sentiment,
-    extracts key drivers and risk factors -- all in one call.
-    No separate search API needed.
-
-    Args:
-        symbol: Stock symbol (e.g., RELIANCE, IDEA, TCS).
-        with_sentiment: Ignored -- Gemini always provides sentiment.
-        user: Authenticated user.
-
-    Returns:
-        ApiResponse with news articles, sentiment, key drivers, risk factors.
+    Uses yfinance, GNews API, and RSS feeds (Moneycontrol, Economic Times).
+    Always returns data — no API key required for basic operation.
     """
     symbol = symbol.upper()
     logger.info("News intelligence for %s by user=%s", symbol, user.get("sub"))
-
     clean_sym = _strip_nse_suffix(symbol)
-    result = await _news_service.get_stock_news(clean_sym, max_articles=5)
 
+    # Multi-source aggregator (yfinance + GNews + RSS — always works)
+    agg = await news_aggregator.get_news(clean_sym, max_articles=10)
     return ApiResponse(
         data=NewsSearchSchema(
             symbol=symbol,
-            query=result.query,
+            query=f"{clean_sym} stock news",
             articles=[
                 NewsArticleSchema(
-                    title=a.title,
-                    url=a.url,
-                    content=a.content,
-                    score=a.score,
-                    published_date=a.published_date,
-                    source=a.source,
-                )
-                for a in result.articles
+                    title=a.title, url=a.url, content=a.content,
+                    score=a.relevance_score, published_date=a.published_date, source=a.source,
+                ) for a in agg.articles
             ],
-            sentiment=result.sentiment,
-            sentiment_score=result.sentiment_score,
-            sentiment_summary=result.summary,
-            article_count=result.article_count,
-            key_drivers=result.key_drivers,
-            risk_factors=result.risk_factors,
+            sentiment=agg.sentiment,
+            sentiment_score=agg.sentiment_score,
+            sentiment_summary=agg.sentiment_summary,
+            article_count=agg.article_count,
+            key_drivers=agg.key_drivers,
+            risk_factors=agg.risk_factors,
         ),
-        message=f"News for {symbol} (sentiment: {result.sentiment})",
+        message=f"News for {symbol} via {', '.join(agg.sources_used)} (sentiment: {agg.sentiment})",
     )
 
 

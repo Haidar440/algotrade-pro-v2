@@ -457,12 +457,25 @@ class GeminiNewsService:
                 continue
             seen_domains.add(source.domain)
 
-            # Use source title as article title, and extract relevant
-            # content snippet from the response text
+            # Extract relevant content snippet from the response text
             content = self._find_relevant_snippet(source.title, raw_text)
 
+            # Clean content — strip leaked JSON keys from Gemini response
+            content = self._clean_json_artifacts(content)
+
+            # Generate a proper title:
+            # Priority: source.title → first meaningful sentence of content → domain
+            title = source.title.strip() if source.title else ""
+            if not title or title == source.domain or len(title) < 5:
+                # Generate title from content (first sentence, capped at 100 chars)
+                if content and len(content) > 10:
+                    first_sentence = content.split(".")[0].strip()
+                    title = first_sentence[:100] + ("..." if len(first_sentence) > 100 else "")
+                else:
+                    title = f"{source.domain} — Financial Report"
+
             articles.append(GeminiNewsArticle(
-                title=source.title if source.title else source.domain,
+                title=title,
                 url=source.url,
                 content=content,
                 score=0.9,  # Gemini grounded results are highly relevant
@@ -470,6 +483,25 @@ class GeminiNewsService:
             ))
 
         return articles
+
+    @staticmethod
+    def _clean_json_artifacts(text: str) -> str:
+        """Strip leaked JSON key prefixes/suffixes from Gemini text.
+
+        Gemini sometimes includes raw JSON keys like '"summary": "...'
+        in its grounded response text.
+        """
+        if not text:
+            return text
+        import re
+        # Remove leading JSON key patterns: "summary": ", "content": ", etc.
+        text = re.sub(r'^"?\w+"?\s*:\s*"?', '', text)
+        # Remove trailing unmatched quote
+        if text.endswith('"'):
+            text = text[:-1]
+        # Remove [cite: N] references
+        text = re.sub(r'\s*\[cite:\s*\d+\]\.?', '', text)
+        return text.strip()
 
     def _find_relevant_snippet(self, title: str, text: str, max_len: int = 200) -> str:
         """Find a relevant snippet from Gemini's response for an article.
@@ -792,6 +824,14 @@ class GeminiNewsService:
             "bseindia.com": "BSE India",
             "yahoo.com": "Yahoo Finance",
             "finance.yahoo.com": "Yahoo Finance",
+            "vertexaisearch.cloud.google.com": "Google Search",
+            "blinkx.in": "Blinkx Finance",
+            "investing.com": "Investing.com",
+            "tradingview.com": "TradingView",
+            "zerodha.com": "Zerodha",
+            "5paisa.com": "5Paisa",
+            "angelone.in": "Angel One",
+            "upstox.com": "Upstox",
         }
 
         for key, name in domain_map.items():

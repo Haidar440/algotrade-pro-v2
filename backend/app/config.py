@@ -67,7 +67,8 @@ class Settings(BaseSettings):
     ZERODHA_API_SECRET: Optional[str] = Field(default=None, description="Zerodha Kite API secret")
 
     # ━━━━ External APIs (optional) ━━━━
-    TAVILY_API_KEY: Optional[str] = Field(default=None, description="Tavily search API key")
+
+    GNEWS_API_KEY: Optional[str] = Field(default=None, description="GNews API key (free tier: 100 req/day)")
 
     # ━━━━ Telegram (optional) ━━━━
     TELEGRAM_BOT_TOKEN: Optional[str] = Field(default=None, description="Telegram bot token")

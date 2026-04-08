@@ -470,13 +470,18 @@ const Dashboard: React.FC = () => {
                         </div>
                         {/* Lightweight views: mount/unmount is fine */}
                         {currentView === 'AUTO_TRADER' && <div className="animate-in fade-in slide-in-from-bottom-4 duration-500"><h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2"><Bot className="w-6 h-6 text-amber-500" /> Algorithmic Trading Engine</h2><AutoTraderDashboard brokerState={brokerState} existingTrader={autoTraderInstance} /></div>}
-                        {currentView === 'NEWS' && <div className="h-full"><NewsAnalysisDashboard /></div>}
                         {currentView === 'BACKTEST' && <BacktestDashboard brokerState={brokerState} />}
                         {currentView === 'STRATEGIES' && <StrategyGuide />}
                         {currentView === 'PYTHON_LAB' && <div className="h-full"><PythonLab data={result} brokerState={brokerState} /></div>}
                         {currentView === 'AI_PICKS' && <AiPicksDashboard />}
                         {currentView === 'ANALYTICS' && <AnalyticsDashboard />}
-                        {currentView === 'INTELLIGENCE' && <div className="animate-in fade-in slide-in-from-bottom-4 duration-500"><IntelligenceDashboard /></div>}
+                        {/* Keep-alive: News + Intelligence stay mounted so scans persist across tab switches */}
+                        <div style={{ display: currentView === 'NEWS' ? 'block' : 'none' }}>
+                            <div className="h-full"><NewsAnalysisDashboard /></div>
+                        </div>
+                        <div style={{ display: currentView === 'INTELLIGENCE' ? 'block' : 'none' }}>
+                            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500"><IntelligenceDashboard /></div>
+                        </div>
                     </div>
                 </main>
 

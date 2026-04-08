@@ -42,7 +42,6 @@ pandas-ta>=0.3.14
 langchain>=0.3.0
 langchain-google-genai>=2.0.0
 langchain-community>=0.3.0
-tavily-python>=0.5.0
 
 # ── Backtesting & Market Data (Sprint 4) ──
 Backtesting>=0.3.3
