@@ -6,6 +6,7 @@ All endpoints require JWT authentication.
 AI responses are sanitized before returning to clients.
 """
 
+import asyncio
 import logging
 from typing import Optional
 
@@ -278,7 +279,9 @@ async def analyze_stock(
 
     # Fetch real market data (yfinance → demo fallback)
     df = await _get_stock_data(symbol)
-    result = _analyzer.analyze(df)
+    # B1 FIX: Offload CPU-bound pandas-ta analysis to thread
+    from app.services.async_utils import run_in_thread
+    result = await run_in_thread(_analyzer.analyze, df)
 
     return ApiResponse(
         data=TechnicalAnalysisSchema(
@@ -351,16 +354,25 @@ async def predict_stock(
 
     # Fetch real market data (yfinance → demo fallback)
     df = await _get_stock_data(symbol)
-    ta_result = _analyzer.analyze(df)
 
-    # Get news if Gemini news service is available (use clean symbol for better search)
-    news_summary = None
-    if _news_service.is_enabled:
+    # B2 FIX: Run pandas-ta analysis and news fetch in parallel
+    # (analyze is CPU-bound in thread, news is IO-bound — both free event loop)
+    from app.services.async_utils import run_in_thread
+
+    async def _fetch_news_summary():
+        if not _news_service.is_enabled:
+            return None
         try:
             news = await _news_service.get_stock_news(clean_sym, max_articles=3)
-            news_summary = news.combined_text if news.article_count > 0 else news.summary or None
+            return news.combined_text if news.article_count > 0 else news.summary or None
         except Exception as e:
             logger.warning("News fetch for prediction failed: %s", e)
+            return None
+
+    ta_result, news_summary = await asyncio.gather(
+        run_in_thread(_analyzer.analyze, df),
+        _fetch_news_summary(),
+    )
 
     # Build AI input
     ai_input = StockAnalysisInput(
@@ -490,37 +502,54 @@ async def get_stock_picks(
         capital, max_risk_percent, user.get("sub"),
     )
 
-    # ── Build stock universe (dynamic swing candidates from TradingView) ──
-    watchlist = _swing_screener.get_swing_candidates(max_results=50)
+    # ── B3 FIX: Parallel batched yfinance fetching ──
+    # Old: serial for-loop (50 × ~1s = 50s). New: batched gather (50 / 10 = 5s)
+    from app.services.async_utils import parallel_batch, cached_async, run_in_thread
 
-    # ── Fetch OHLCV data (yfinance preferred for bulk — Angel One too slow for 50 stocks) ──
-    # Angel One has ~2-3s per stock API latency = 100-150s for 50 stocks.
-    # yfinance handles batch much better (~1s per stock, cached).
-    # Angel One is still used for single-stock endpoints (/analyze, /predict).
-    stock_data = {}
-    for sym in watchlist:
-        try:
-            stock_data[sym] = await _get_stock_data(sym, use_broker=False)
-        except Exception as e:
-            logger.warning("Failed to fetch data for %s: %s", sym, e)
+    # Cache swing candidates (15 min TTL — TradingView screener doesn't change fast)
+    async def _get_candidates():
+        return await run_in_thread(_swing_screener.get_swing_candidates, max_results=50)
 
-    # ── Fetch Gemini news sentiment for all symbols (parallel-safe) ──
+    watchlist = await cached_async(
+        "picks", "swing_candidates", _get_candidates, ttl=900,
+    )
+
+    # Parallel OHLCV fetch: Semaphore(10) limits concurrent yfinance connections
+    yf_sem = asyncio.Semaphore(10)
+
+    async def _fetch_one(sym):
+        async with yf_sem:
+            try:
+                df = await _get_stock_data(sym, use_broker=False)
+                return (sym, df)
+            except Exception as e:
+                logger.warning("Failed to fetch data for %s: %s", sym, e)
+                return None
+
+    fetch_results = await asyncio.gather(*[_fetch_one(s) for s in watchlist])
+    stock_data = {sym: df for result in fetch_results if result for sym, df in [result]}
+
+    # ── Parallel news sentiment: Semaphore(5) to respect API rate limits ──
     news_sentiments: dict[str, dict] = {}
     if _news_service.is_enabled:
-        for sym in list(stock_data.keys())[:15]:  # Limit to 15 to avoid rate limits
-            try:
-                result = await _news_service.get_stock_news(sym, max_articles=3)
-                if result and result.sentiment:
-                    news_sentiments[sym] = {
-                        "sentiment": result.sentiment,
-                        "score": result.sentiment_score,
-                    }
-                    logger.debug(
-                        "News sentiment %s: %s (%.0f)",
-                        sym, result.sentiment, result.sentiment_score,
-                    )
-            except Exception as e:
-                logger.debug("News sentiment skip %s: %s", sym, e)
+        news_sem = asyncio.Semaphore(5)
+        symbols_for_news = list(stock_data.keys())[:15]
+
+        async def _fetch_news_sentiment(sym):
+            async with news_sem:
+                try:
+                    result = await _news_service.get_stock_news(sym, max_articles=3)
+                    if result and result.sentiment:
+                        return (sym, {
+                            "sentiment": result.sentiment,
+                            "score": result.sentiment_score,
+                        })
+                except Exception as e:
+                    logger.debug("News sentiment skip %s: %s", sym, e)
+            return None
+
+        news_results = await asyncio.gather(*[_fetch_news_sentiment(s) for s in symbols_for_news])
+        news_sentiments = {sym: data for r in news_results if r for sym, data in [r]}
 
     logger.info(
         "News sentiment fetched for %d/%d stocks",
@@ -651,49 +680,56 @@ async def get_market_indices(
     """
     import asyncio
 
-    # Default fallback values
-    defaults = {
-        "nifty": {"price": 22450.30, "changePercent": 0.0},
-        "sensex": {"price": 73980.15, "changePercent": 0.0},
-        "bankNifty": {"price": 47850.00, "changePercent": 0.0},
-    }
+    # B6 FIX: 60s TTL cache for market indices — avoids repeated yfinance calls
+    from app.services.async_utils import cached_async
 
-    try:
-        import yfinance as yf
-
-        tickers = {
-            "nifty": "^NSEI",
-            "sensex": "^BSESN",
-            "bankNifty": "^NSEBANK",
+    async def _compute_indices():
+        defaults = {
+            "nifty": {"price": 22450.30, "changePercent": 0.0},
+            "sensex": {"price": 73980.15, "changePercent": 0.0},
+            "bankNifty": {"price": 47850.00, "changePercent": 0.0},
         }
 
-        def _fetch_indices() -> dict:
-            """Fetch index data from yfinance (blocking, runs in thread)."""
-            result = {}
-            for key, yf_symbol in tickers.items():
-                try:
-                    ticker = yf.Ticker(yf_symbol)
-                    info = ticker.fast_info
-                    price = getattr(info, "last_price", None) or getattr(info, "previous_close", None)
-                    prev_close = getattr(info, "previous_close", None)
-                    if price and prev_close and prev_close > 0:
-                        change_pct = round(((price - prev_close) / prev_close) * 100, 2)
-                    else:
-                        change_pct = 0.0
-                    result[key] = {
-                        "price": round(float(price), 2) if price else defaults[key]["price"],
-                        "changePercent": change_pct,
-                    }
-                except Exception:
-                    result[key] = defaults[key]
-            return result
+        try:
+            import yfinance as yf
 
-        indices = await asyncio.to_thread(_fetch_indices)
-    except Exception as exc:
-        logger.warning("yfinance index fetch failed: %s — using defaults", exc)
-        indices = defaults
+            tickers = {
+                "nifty": "^NSEI",
+                "sensex": "^BSESN",
+                "bankNifty": "^NSEBANK",
+            }
 
-    # Add market news summary from Gemini (non-blocking, failure safe)
+            def _fetch_indices() -> dict:
+                """Fetch index data from yfinance (blocking, runs in thread)."""
+                result = {}
+                for key, yf_symbol in tickers.items():
+                    try:
+                        ticker = yf.Ticker(yf_symbol)
+                        info = ticker.fast_info
+                        price = getattr(info, "last_price", None) or getattr(info, "previous_close", None)
+                        prev_close = getattr(info, "previous_close", None)
+                        if price and prev_close and prev_close > 0:
+                            change_pct = round(((price - prev_close) / prev_close) * 100, 2)
+                        else:
+                            change_pct = 0.0
+                        result[key] = {
+                            "price": round(float(price), 2) if price else defaults[key]["price"],
+                            "changePercent": change_pct,
+                        }
+                    except Exception:
+                        result[key] = defaults[key]
+                return result
+
+            indices = await asyncio.to_thread(_fetch_indices)
+        except Exception as exc:
+            logger.warning("yfinance index fetch failed: %s — using defaults", exc)
+            indices = defaults
+
+        return indices
+
+    indices = await cached_async("market_indices", "latest", _compute_indices, ttl=60)
+
+    # Add market news summary (non-blocking, failure safe)
     market_summary = None
     try:
         if _news_service.is_enabled:
@@ -707,7 +743,7 @@ async def get_market_indices(
 
     return ApiResponse(
         data=indices,
-        message="Market indices (live)" if indices != defaults else "Market indices (fallback)",
+        message="Market indices",
     )
 
 

@@ -228,6 +228,10 @@ class AngelOneBroker(BrokerInterface):
     async def place_order(self, order: OrderRequest) -> OrderResponse:
         """Place an order via Angel One SmartAPI.
 
+        SEBI Compliance: MARKET orders are auto-converted to LIMIT orders
+        with a price buffer (BUY +0.2%, SELL -0.2%) to comply with
+        SEBI algo trading regulations.
+
         Args:
             order: Standardized order request.
 
@@ -254,17 +258,55 @@ class AngelOneBroker(BrokerInterface):
             if order.exchange == Exchange.NSE and not trading_symbol.endswith("-EQ"):
                 trading_symbol = f"{trading_symbol}-EQ"
 
+            # ━━━ SEBI Compliance: Convert MARKET → LIMIT ━━━
+            effective_order_type = order.order_type
+            effective_price = order.price
+
+            if order.order_type == OrderType.MARKET:
+                try:
+                    ltp = await self.get_ltp(order.symbol, order.exchange)
+
+                    if ltp is None or ltp <= 0:
+                        raise ValueError(f"Invalid LTP ({ltp}) for {order.symbol}")
+
+                    # Apply price buffer: BUY gets slightly higher, SELL slightly lower
+                    if order.side == OrderSide.BUY:
+                        effective_price = round(ltp * 1.002, 2)   # +0.2%
+                    else:
+                        effective_price = round(ltp * 0.998, 2)   # -0.2%
+
+                    effective_order_type = OrderType.LIMIT
+
+                    logger.warning(
+                        "SEBI compliance: MARKET → LIMIT conversion — "
+                        "symbol=%s, side=%s, ltp=%.2f, limit_price=%.2f",
+                        order.symbol, order.side.value, ltp, effective_price,
+                    )
+
+                except Exception as ltp_err:
+                    logger.error(
+                        "SEBI MARKET→LIMIT failed (LTP unavailable): %s — "
+                        "REJECTING order for safety", ltp_err,
+                    )
+                    raise BrokerConnectionError(
+                        broker="Angel One",
+                        detail=(
+                            f"Cannot place MARKET order: LTP unavailable for {order.symbol}. "
+                            f"SEBI requires LIMIT orders for algo trading."
+                        ),
+                    )
+
             order_params = {
                 "variety": "NORMAL",
                 "tradingsymbol": trading_symbol,
                 "symboltoken": symbol_token,
                 "transactiontype": _ORDER_SIDE_MAP[order.side],
                 "exchange": _EXCHANGE_MAP[order.exchange],
-                "ordertype": _ORDER_TYPE_MAP[order.order_type],
+                "ordertype": _ORDER_TYPE_MAP[effective_order_type],
                 "producttype": _PRODUCT_MAP.get(order.product, "DELIVERY"),
                 "duration": "DAY",
                 "quantity": str(order.quantity),
-                "price": str(order.price) if order.price > 0 else "0",
+                "price": str(effective_price) if effective_price > 0 else "0",
                 "triggerprice": str(order.trigger_price) if order.trigger_price > 0 else "0",
             }
 
@@ -277,8 +319,9 @@ class AngelOneBroker(BrokerInterface):
                 )
 
             logger.info(
-                "Angel One order placed — symbol=%s, side=%s, qty=%d, order_id=%s",
-                order.symbol, order.side.value, order.quantity, response,
+                "Angel One order placed — symbol=%s, side=%s, qty=%d, type=%s, price=%s, order_id=%s",
+                order.symbol, order.side.value, order.quantity,
+                effective_order_type.value, effective_price, response,
             )
 
             return OrderResponse(

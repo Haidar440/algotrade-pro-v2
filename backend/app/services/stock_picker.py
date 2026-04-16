@@ -175,29 +175,51 @@ class StockPicker:
         picks = []
         news_sentiments = news_sentiments or {}
 
-        # Pre-fetch Nifty 50 return for relative strength scoring
-        self._nifty_return = self._get_nifty_return()
+        # B8 FIX: Offload blocking yfinance calls to threads + cache 15min
+        from app.services.async_utils import run_in_thread, cached_async, make_cache_key
 
-        # Pre-fetch fundamentals for all symbols in one batch
-        self._prefetch_fundamentals(list(stock_data.keys()))
+        # Cache Nifty return (15 min TTL)
+        async def _cached_nifty():
+            return await run_in_thread(self._get_nifty_return)
 
-        for symbol, df in stock_data.items():
-            try:
-                pick = self._analyze_stock(
-                    symbol=symbol,
-                    df=df,
-                    capital=capital,
-                    max_risk_percent=max_risk_percent,
-                    news_sentiment=news_sentiments.get(symbol),
-                )
-                if pick and pick.score >= 40:  # Minimum score threshold
-                    picks.append(pick)
-            except Exception as e:
-                logger.warning("Failed to analyze %s: %s", symbol, e)
-                continue
+        self._nifty_return = await cached_async(
+            "fundamentals", "nifty_return", _cached_nifty, ttl=900,
+        )
 
-        # Sort by score descending
-        picks.sort(key=lambda p: p.score, reverse=True)
+        # Cache fundamentals batch (15 min TTL, keyed by symbols hash)
+        all_syms = sorted(stock_data.keys())
+        cache_key = make_cache_key(*all_syms)
+
+        async def _cached_fundamentals():
+            await run_in_thread(self._prefetch_fundamentals, list(stock_data.keys()))
+            return dict(self._fundamentals_cache)
+
+        cached_fund = await cached_async(
+            "fundamentals", cache_key, _cached_fundamentals, ttl=900,
+        )
+        if cached_fund:
+            self._fundamentals_cache = cached_fund
+
+        # Offload CPU-bound pandas-ta scan loop to thread
+        def _scan_all():
+            results = []
+            for symbol, df in stock_data.items():
+                try:
+                    pick = self._analyze_stock(
+                        symbol=symbol,
+                        df=df,
+                        capital=capital,
+                        max_risk_percent=max_risk_percent,
+                        news_sentiment=news_sentiments.get(symbol),
+                    )
+                    if pick and pick.score >= 40:
+                        results.append(pick)
+                except Exception as e:
+                    logger.warning("Failed to analyze %s: %s", symbol, e)
+            results.sort(key=lambda p: p.score, reverse=True)
+            return results[:top_n]
+
+        picks = await run_in_thread(_scan_all)
 
         logger.info(
             "Stock picker scanned %d stocks, found %d picks (showing top %d)",

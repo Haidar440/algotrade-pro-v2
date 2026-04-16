@@ -3,8 +3,10 @@ import { fetchAIStockPicks, StockPicksResult, StockPick } from '../services/gemi
 import { getUserErrorMessage } from '../services/errorMessages';
 import {
   Target, TrendingUp, TrendingDown, AlertTriangle, Zap,
-  RefreshCw, DollarSign, Shield, Star, ChevronDown, ChevronUp
+  RefreshCw, DollarSign, Shield, Star, ChevronDown, ChevronUp,
+  Bot, CheckCircle2
 } from 'lucide-react';
+import { getOptimizedSymbols, markDeployed, getOptimized, getAllOptimized } from '../services/optimizedParamsStore';
 
 /**
  * AiPicksDashboard — AI-powered stock picker using 10-layer scoring.
@@ -17,6 +19,31 @@ const AiPicksDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [capital, setCapital] = useState<number>(100000);
   const [expandedPick, setExpandedPick] = useState<string | null>(null);
+  const [deployedSet, setDeployedSet] = useState<Set<string>>(new Set());
+
+  // Check if a symbol has optimized params
+  const isOptimized = (symbol: string): boolean => {
+    const clean = symbol.replace('.NS', '').replace(/-EQ$|-BE$|-BL$/, '');
+    return getOptimizedSymbols().includes(clean);
+  };
+
+  // Get the best optimized result for a symbol
+  const getOptInfo = (symbol: string) => {
+    const clean = symbol.replace('.NS', '').replace(/-EQ$|-BE$|-BL$/, '');
+    const all = getAllOptimized().filter(r => r.symbol === clean);
+    if (all.length === 0) return null;
+    return all.sort((a, b) => b.returnPct - a.returnPct)[0];
+  };
+
+  // Deploy optimized params to Auto-Bot
+  const handleDeploy = (symbol: string) => {
+    const clean = symbol.replace('.NS', '').replace(/-EQ$|-BE$|-BL$/, '');
+    const opt = getOptInfo(symbol);
+    if (opt) {
+      markDeployed(clean, opt.strategy);
+      setDeployedSet(prev => new Set(prev).add(clean));
+    }
+  };
 
   const handleScan = async () => {
     setLoading(true);
@@ -155,7 +182,14 @@ const AiPicksDashboard: React.FC = () => {
                       <p className="text-[7px] md:text-[8px] font-medium -mt-0.5" style={{ color: 'var(--text-muted)' }}>SCORE</p>
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm md:text-sm font-semibold tracking-tight" style={{ color: 'var(--text)' }}>{pick.symbol}</p>
+                      <p className="text-sm md:text-sm font-semibold tracking-tight flex items-center gap-1.5" style={{ color: 'var(--text)' }}>
+                        {pick.symbol}
+                        {isOptimized(pick.symbol) && (
+                          <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-0.5">
+                            <Zap className="w-2.5 h-2.5" /> Optimized
+                          </span>
+                        )}
+                      </p>
                       <p className="text-[10px] md:text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>₹{pick.price.toFixed(2)} · {pick.entry_range}</p>
                     </div>
                   </div>
@@ -209,6 +243,36 @@ const AiPicksDashboard: React.FC = () => {
                         </div>
                       ))}
                     </div>
+
+                    {/* Optimized Params Deploy */}
+                    {isOptimized(pick.symbol) && (() => {
+                      const opt = getOptInfo(pick.symbol);
+                      const clean = pick.symbol.replace('.NS', '').replace(/-EQ$|-BE$|-BL$/, '');
+                      const alreadyDeployed = deployedSet.has(clean);
+                      if (!opt) return null;
+                      return (
+                        <div className="flex items-center justify-between rounded-lg p-2.5" style={{ background: 'rgba(245, 158, 11, 0.06)', border: '1px solid rgba(245, 158, 11, 0.15)' }}>
+                          <div className="flex items-center gap-2">
+                            <Zap className="w-3.5 h-3.5" style={{ color: 'var(--accent-amber)' }} />
+                            <div>
+                              <p className="text-[10px] font-semibold" style={{ color: 'var(--accent-amber)' }}>Optimized: {opt.strategyDisplay}</p>
+                              <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>+{opt.returnPct.toFixed(1)}% backtested return</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDeploy(pick.symbol); }}
+                            disabled={alreadyDeployed}
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1.5 transition-all ${alreadyDeployed
+                                ? 'bg-emerald-800/50 text-emerald-400 border border-emerald-500/30 cursor-default'
+                                : 'bg-blue-600 hover:bg-blue-500 text-white'
+                              }`}
+                          >
+                            {alreadyDeployed ? <CheckCircle2 className="w-3 h-3" /> : <Bot className="w-3 h-3" />}
+                            {alreadyDeployed ? 'Deployed ✓' : 'Deploy'}
+                          </button>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>

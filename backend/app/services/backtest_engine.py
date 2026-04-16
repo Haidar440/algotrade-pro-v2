@@ -124,10 +124,13 @@ class BacktestEngine:
             finalize_trades=True,  # Close open trades at end, include in stats
         )
 
-        stats = bt.run()
+        # B4 FIX: Run backtest in thread — bt.run() is synchronous C/Python
+        from app.services.async_utils import run_in_thread
 
-        # Generate chart HTML
-        chart_html = self._generate_chart(bt, symbol, strategy_name)
+        stats = await run_in_thread(bt.run)
+
+        # B9 FIX: Chart generation is CPU-bound (matplotlib/bokeh rendering)
+        chart_html = await run_in_thread(self._generate_chart, bt, symbol, strategy_name)
 
         # Extract key stats
         stats_dict = self._extract_stats(stats)
@@ -233,11 +236,17 @@ class BacktestEngine:
             }
 
         try:
-            stats = bt.optimize(
-                **opt_ranges,
-                maximize=maximize,
-                max_tries=200,  # Limit search space for speed
-            )
+            # B5 FIX: Optimizer runs 200 param combos — offload to thread
+            from app.services.async_utils import run_in_thread
+
+            def _run_optimize():
+                return bt.optimize(
+                    **opt_ranges,
+                    maximize=maximize,
+                    max_tries=200,
+                )
+
+            stats = await run_in_thread(_run_optimize)
 
             optimized_params = {}
             for param_name in opt_ranges:

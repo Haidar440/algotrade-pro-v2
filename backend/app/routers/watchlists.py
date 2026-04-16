@@ -11,7 +11,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, Body, Depends, Query
-from sqlalchemy import select, or_, func
+from sqlalchemy import select, or_, and_, func, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -62,14 +62,23 @@ async def search_instruments(
         ApiResponse containing matching instruments.
     """
     query_upper = q.strip().upper()
+    keywords = [k for k in query_upper.split() if k]
+    
+    if not keywords:
+        return ApiResponse(data=[], message="Empty query")
 
-    # Build filter conditions
+    # Build filter conditions: All keywords must be found in either symbol or name
+    keyword_conditions = [
+        or_(
+            func.upper(Instrument.symbol).contains(kw),
+            func.upper(Instrument.name).contains(kw),
+        )
+        for kw in keywords
+    ]
+
     conditions = [
         Instrument.exch_seg == exchange.upper(),
-        or_(
-            func.upper(Instrument.symbol).contains(query_upper),
-            func.upper(Instrument.name).contains(query_upper),
-        ),
+        and_(*keyword_conditions),
     ]
 
     # Filter EQ-only: exclude -BE, -BL, futures, options etc.
@@ -86,13 +95,10 @@ async def search_instruments(
     stmt = (
         select(Instrument)
         .where(*conditions)
-        # Prioritize: exact match first, then starts-with, then contains
+        # Prioritize: exact match first, then starts-with, then alphabetical
         .order_by(
-            # Exact symbol match gets priority 0
-            (func.upper(Instrument.symbol) == query_upper).desc(),
-            # Starts-with gets priority 1
-            func.upper(Instrument.symbol).startswith(query_upper).desc(),
-            # Then alphabetical
+            case((func.upper(Instrument.symbol) == query_upper, 0), else_=1),
+            case((func.upper(Instrument.symbol).startswith(query_upper), 0), else_=1),
             Instrument.symbol,
         )
         .limit(limit)

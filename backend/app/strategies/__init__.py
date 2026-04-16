@@ -33,6 +33,9 @@ def _register_strategies() -> None:
     from app.strategies.vcp_breakout import VCPBreakoutStrategy
     from app.strategies.volume_breakout import VolumeBreakoutStrategy
     from app.strategies.vwap_orb import VWAPOrbStrategy
+    from app.strategies.golden_cross import GoldenCrossStrategy
+    from app.strategies.bollinger_squeeze import BollingerSqueezeStrategy
+    from app.strategies.double_bottom import DoubleBottomStrategy
 
     STRATEGY_REGISTRY = {
         "supertrend_rsi": SupertrendRSIStrategy,
@@ -41,6 +44,9 @@ def _register_strategies() -> None:
         "rsi_macd": RSIMACDStrategy,
         "vcp_breakout": VCPBreakoutStrategy,
         "volume_breakout": VolumeBreakoutStrategy,
+        "golden_cross": GoldenCrossStrategy,
+        "bollinger_squeeze": BollingerSqueezeStrategy,
+        "double_bottom": DoubleBottomStrategy,
     }
 
 
