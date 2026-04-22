@@ -14,6 +14,7 @@ interface NavbarProps {
 const Navbar: React.FC<NavbarProps> = ({ onMenuClick, activeView, onConnectClick, isConnected }) => {
   const getTitle = () => {
     switch (activeView) {
+      case 'DASHBOARD': return 'Dashboard';
       case 'SCANNER': return 'Market Scanner';
       case 'PORTFOLIO': return 'Paper Portfolio';
       case 'STRATEGIES': return 'Strategy Guide';
@@ -41,8 +42,8 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick, activeView, onConnectClick
           <button
             onClick={onConnectClick}
             className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${isConnected
-                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white border border-slate-700'
+              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+              : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white border border-slate-700'
               }`}
           >
             {isConnected ? <CheckCircle2 className="w-3 h-3" /> : <Settings className="w-3 h-3" />}

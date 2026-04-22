@@ -688,6 +688,16 @@ async def get_market_indices(
             "nifty": {"price": 22450.30, "changePercent": 0.0},
             "sensex": {"price": 73980.15, "changePercent": 0.0},
             "bankNifty": {"price": 47850.00, "changePercent": 0.0},
+            "niftyIT": {"price": 34200.00, "changePercent": 0.0},
+            "niftyPharma": {"price": 17800.00, "changePercent": 0.0},
+            "niftyMidcap50": {"price": 14500.00, "changePercent": 0.0},
+            "niftyAuto": {"price": 22600.00, "changePercent": 0.0},
+            "niftyMetal": {"price": 8400.00, "changePercent": 0.0},
+            "niftyEnergy": {"price": 35200.00, "changePercent": 0.0},
+            "niftyFMCG": {"price": 54800.00, "changePercent": 0.0},
+            "niftyRealty": {"price": 940.00, "changePercent": 0.0},
+            "niftyFinService": {"price": 21500.00, "changePercent": 0.0},
+            "niftyPSEBank": {"price": 6800.00, "changePercent": 0.0},
         }
 
         try:
@@ -697,6 +707,16 @@ async def get_market_indices(
                 "nifty": "^NSEI",
                 "sensex": "^BSESN",
                 "bankNifty": "^NSEBANK",
+                "niftyIT": "^CNXIT",
+                "niftyPharma": "^CNXPHARMA",
+                "niftyMidcap50": "^NSEMDCP50",
+                "niftyAuto": "^CNXAUTO",
+                "niftyMetal": "^CNXMETAL",
+                "niftyEnergy": "^CNXENERGY",
+                "niftyFMCG": "^CNXFMCG",
+                "niftyRealty": "^CNXREALTY",
+                "niftyFinService": "^CNXFIN",
+                "niftyPSEBank": "^CNXPSUBANK",
             }
 
             def _fetch_indices() -> dict:
@@ -713,11 +733,11 @@ async def get_market_indices(
                         else:
                             change_pct = 0.0
                         result[key] = {
-                            "price": round(float(price), 2) if price else defaults[key]["price"],
+                            "price": round(float(price), 2) if price else defaults.get(key, {"price": 0})["price"],
                             "changePercent": change_pct,
                         }
                     except Exception:
-                        result[key] = defaults[key]
+                        result[key] = defaults.get(key, {"price": 0, "changePercent": 0})
                 return result
 
             indices = await asyncio.to_thread(_fetch_indices)

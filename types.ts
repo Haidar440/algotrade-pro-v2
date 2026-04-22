@@ -19,6 +19,7 @@ export interface Trade {
 }
 // Split PORTFOLIO into REAL_PORTFOLIO and PAPER_TRADING
 export type View =
+  | 'DASHBOARD'
   | 'SCANNER'
   | 'WATCHLIST'
   | 'REAL_PORTFOLIO'

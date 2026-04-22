@@ -13,7 +13,8 @@ import {
   Calendar,
   LogOut,
   Target,
-  BarChart3
+  BarChart3,
+  Home
 } from 'lucide-react';
 import { View } from '../types';
 import { useAuth } from './AuthContext';
@@ -70,6 +71,17 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onSelectView, isOpen, onC
 
         {/* Navigation List */}
         <nav className="px-3 space-y-1.5 mt-6 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700">
+
+          {/* Dashboard Home */}
+          <button
+            onClick={() => { onSelectView('DASHBOARD'); onClose(); }}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-bold ${activeView === 'DASHBOARD'
+              ? 'bg-gradient-to-r from-emerald-500 to-blue-600 text-white shadow-lg shadow-emerald-900/40'
+              : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+              }`}
+          >
+            <Home className="w-5 h-5" /> Dashboard
+          </button>
 
           {/* Main Scanner */}
           <button

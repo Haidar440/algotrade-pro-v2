@@ -26,6 +26,7 @@ import RealPortfolio from './RealPortfolio';
 import AutoTraderDashboard from './AutoTraderDashboard';
 import { checkMarketStatus } from '../utils/marketTime';
 import TradeHistory from './TradeHistory';
+import DashboardHome from './DashboardHome';
 import WatchlistManager from './WatchlistManager';
 import TradingViewTicker from './TradingViewTicker';
 import AiPicksDashboard from './AiPicksDashboard';
@@ -36,9 +37,10 @@ import {
 } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
-    const [currentView, setCurrentView] = useState<View>('SCANNER');
+    const [currentView, setCurrentView] = useState<View>('DASHBOARD');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [autoTraderInstance, setAutoTraderInstance] = useState<AutoTrader | null>(null);
+    const viewBeforeAnalysis = useRef<View>('DASHBOARD');
 
     const [paperTrades, setPaperTrades] = useState<PaperTrade[]>(() => {
         try { return JSON.parse(localStorage.getItem('algoTradePro_portfolio') || '[]'); } catch { return []; }
@@ -60,7 +62,7 @@ const Dashboard: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [loadingStep, setLoadingStep] = useState<number>(0);
     const [isMarketOpen, setIsMarketOpen] = useState(false);
-    const [marketIndices, setMarketIndices] = useState<MarketIndices | null>(null);
+    const [marketIndices, setMarketIndices] = useState<any>(null);
 
     // Initialize Global AutoTrader
     useEffect(() => {
@@ -209,20 +211,21 @@ const Dashboard: React.FC = () => {
     useEffect(() => { localStorage.setItem('algoTradePro_brokerState', JSON.stringify(brokerState)); }, [brokerState]);
     useEffect(() => { localStorage.setItem('algoTradePro_watchlist', JSON.stringify(watchlist)); }, [watchlist]);
 
+    const refreshIndices = async () => {
+        if (brokerState.angel) {
+            try {
+                const angel = new AngelOne(brokerState.angel);
+                const data = await angel.getMarketIndices();
+                if (data) setMarketIndices(data);
+            } catch (e) { }
+        } else {
+            const data = await fetchMarketIndices();
+            setMarketIndices(data);
+        }
+    };
+
     useEffect(() => {
-        const initIndices = async () => {
-            if (brokerState.angel) {
-                try {
-                    const angel = new AngelOne(brokerState.angel);
-                    const data = await angel.getMarketIndices();
-                    if (data) setMarketIndices(data);
-                } catch (e) { }
-            } else {
-                const data = await fetchMarketIndices();
-                setMarketIndices(data);
-            }
-        };
-        initIndices();
+        refreshIndices();
     }, [brokerState.angel]);
 
     useEffect(() => {
@@ -287,6 +290,7 @@ const Dashboard: React.FC = () => {
     };
 
     const runAnalysis = async (symbol: string) => {
+        viewBeforeAnalysis.current = currentView;
         setLoading(true); setError(null); setResult(null); setLoadingStep(0);
         const interval = setInterval(() => { setLoadingStep(prev => (prev < steps.length - 1 ? prev + 1 : prev)); }, 800);
         try {
@@ -402,9 +406,29 @@ const Dashboard: React.FC = () => {
             <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden relative">
                 <Navbar onMenuClick={() => setIsSidebarOpen(true)} activeView={currentView} onConnectClick={() => setShowSettingsModal(true)} isConnected={!!brokerState.angel} />
 
-                {currentView === 'SCANNER' && !result && <TradingViewTicker />}
+                {(currentView === 'SCANNER') && !result && <TradingViewTicker />}
                 <main className="flex-1 overflow-y-auto overflow-x-hidden bg-slate-900/50 p-4 md:p-8 scroll-smooth w-full">
                     <div className="max-w-7xl mx-auto min-h-full pb-20">
+
+                        {/* ✅ DASHBOARD HOME — New default landing page */}
+                        {currentView === 'DASHBOARD' && (
+                            <DashboardHome
+                                marketIndices={marketIndices}
+                                isMarketOpen={isMarketOpen}
+                                brokerState={brokerState}
+                                signals={signals}
+                                onNavigate={setCurrentView}
+                                onRunAnalysis={runAnalysis}
+                                ticker={ticker}
+                                onTickerChange={handleInputChange}
+                                suggestions={suggestions}
+                                showSuggestions={showSuggestions}
+                                onSearch={handleSearch}
+                                loading={loading}
+                                onRefreshIndices={refreshIndices}
+                            />
+                        )}
+
                         {currentView === 'SCANNER' && (
                             <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
                                 {!result && (
@@ -432,7 +456,7 @@ const Dashboard: React.FC = () => {
                                 {!result && !loading && renderDashboardFeed()}
                                 {result && !loading && (
                                     <StockDetailView
-                                        result={result} livePrice={livePrice} isMarketOpen={isMarketOpen} onRefresh={handleRefresh} onBack={() => setResult(null)} brokerState={brokerState} onPaperTrade={executePaperTrade} onPriceEdit={handleManualPriceUpdate} isInWatchlist={watchlist.some(w => w.symbol === result.symbol)}
+                                        result={result} livePrice={livePrice} isMarketOpen={isMarketOpen} onRefresh={handleRefresh} onBack={() => { setResult(null); setCurrentView(viewBeforeAnalysis.current); }} brokerState={brokerState} onPaperTrade={executePaperTrade} onPriceEdit={handleManualPriceUpdate} isInWatchlist={watchlist.some(w => w.symbol === result.symbol)}
                                         onToggleWatchlist={() => {
                                             if (watchlist.some(w => w.symbol === result.symbol)) setWatchlist(prev => prev.filter(w => w.symbol !== result.symbol));
                                             else setWatchlist(prev => [{ id: `man_${result.symbol}_${Date.now()}`, symbol: result.symbol, name: INDIAN_STOCKS.find(s => s.symbol === result.symbol)?.name || result.symbol, price: livePrice, changePercent: 0, signal: result.primary_recommendation.signal as any, confidence: result.primary_recommendation.confidence, strategy: result.primary_recommendation.strategy_name, entry: result.primary_recommendation.ideal_entry_range?.[0] || result.current_price, stopLoss: result.primary_recommendation.stop_loss || 0, target: result.primary_recommendation.target_prices?.[0] || 0, timeframe: 'Swing', sector: 'Unknown', timestamp: new Date().toISOString() }, ...prev]);
