@@ -27,6 +27,35 @@ router = APIRouter(tags=["WebSocket"])
 # ━━━━━━━━━━━━━━━ WebSocket Endpoint (no JWT — WS handles auth via query param) ━━━━━━━━━━━━━━━
 
 
+@router.websocket("/ws/indices")
+async def websocket_indices(ws: WebSocket):
+    """WebSocket endpoint for real-time market index streaming.
+
+    Streams NIFTY, SENSEX, BANK NIFTY + 10 sector indices.
+    Automatically starts yfinance poller on first connection.
+
+    Message format (server → client):
+        {"type": "indices_snapshot", "data": {...}}  — on connect
+        {"type": "indices_update", "data": {...}}    — periodic updates
+    """
+    await ws_manager.add_index_client(ws)
+
+    try:
+        while True:
+            raw = await ws.receive_text()
+            try:
+                msg = __import__("json").loads(raw)
+                if msg.get("action") == "ping":
+                    await ws.send_json({"type": "pong"})
+            except Exception:
+                pass
+    except WebSocketDisconnect:
+        await ws_manager.remove_index_client(ws)
+    except Exception as exc:
+        logger.error("Index WS error: %s", exc)
+        await ws_manager.remove_index_client(ws)
+
+
 @router.websocket("/ws/prices")
 async def websocket_prices(ws: WebSocket):
     """WebSocket endpoint for real-time price streaming.

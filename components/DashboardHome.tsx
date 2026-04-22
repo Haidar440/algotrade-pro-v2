@@ -3,11 +3,14 @@ import {
     TrendingUp, TrendingDown, Search, Zap, LayoutDashboard, Bot, Briefcase,
     FileText, Target, Brain, BarChart3, Clock, ArrowUpRight, ArrowDownRight,
     Activity, Sparkles, ChevronRight, Sun, Moon, Landmark, Cpu, Building2,
-    FlaskConical, Fuel, ShoppingCart, Home, Banknote, LineChart, RefreshCw
+    FlaskConical, Fuel, ShoppingCart, Home, Banknote, LineChart, RefreshCw, Radio
 } from 'lucide-react';
 import { View, BrokerState, SignalFeedItem, Stock } from '../types';
 import { INDIAN_STOCKS } from '../services/stockData';
 import { DB_SERVICE } from '../services/db';
+import { useRealtimeIndices } from '../hooks/useRealtimeIndices';
+import NewsTicker from './NewsTicker';
+import MarketMiniChart from './MarketMiniChart';
 
 // ── Index metadata for display ──
 const INDEX_META: Record<string, { label: string; icon: React.ReactNode; gradient: string; accentBg: string }> = {
@@ -64,6 +67,10 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
     const [currentTime, setCurrentTime] = useState(new Date());
     const [animatedCards, setAnimatedCards] = useState<Set<string>>(new Set());
 
+    // Real-time WebSocket indices (prefers WS over REST prop)
+    const { indices: wsIndices, isLive, isLoading: wsLoading } = useRealtimeIndices();
+    const liveIndices = wsIndices || marketIndices;
+
     useEffect(() => {
         const interval = setInterval(() => setCurrentTime(new Date()), 1000);
         return () => clearInterval(interval);
@@ -106,7 +113,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
 
     // Sector index cards (excluding hero cards)
     const sectorKeys = Object.keys(INDEX_META).filter(k => !HERO_KEYS.includes(k));
-    const isLoadingIndices = !marketIndices;
+    const isLoadingIndices = !liveIndices;
 
     return (
         <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 space-y-6">
@@ -123,6 +130,12 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
                     <p className="text-slate-400 mt-1 text-sm">Welcome back, Trader. Here's your market overview.</p>
                 </div>
                 <div className="flex items-center gap-3">
+                    {isLive && (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
+                            <Radio className="w-3 h-3 text-emerald-400 animate-pulse" />
+                            <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Live</span>
+                        </div>
+                    )}
                     {onRefreshIndices && (
                         <button onClick={onRefreshIndices} className="p-2 rounded-lg bg-slate-800/50 text-slate-400 hover:text-white hover:bg-slate-700/50 transition-all" title="Refresh indices">
                             <RefreshCw className="w-4 h-4" />
@@ -180,7 +193,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {HERO_KEYS.map((key) => {
                         const meta = INDEX_META[key];
-                        const data = marketIndices?.[key];
+                        const data = liveIndices?.[key];
                         const price = data?.price || 0;
                         const change = data?.changePercent || 0;
                         const isUp = change >= 0;
@@ -234,6 +247,9 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
                     })}
                 </div>
 
+                {/* ━━ MARKET CHART ━━ */}
+                <MarketMiniChart />
+
                 {/* ━━ SECTOR INDICES GRID ━━ */}
                 <div>
                     <h3 className="text-base font-bold text-slate-300 mb-3 flex items-center gap-2">
@@ -242,7 +258,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                         {sectorKeys.map((key) => {
                             const meta = INDEX_META[key];
-                            const data = marketIndices?.[key];
+                            const data = liveIndices?.[key];
                             const price = data?.price || 0;
                             const change = data?.changePercent || 0;
                             const isUp = change >= 0;
@@ -285,6 +301,9 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
                         })}
                     </div>
                 </div>
+
+                {/* ━━ MARKET NEWS TICKER ━━ */}
+                <NewsTicker />
 
                 {/* ━━ QUICK ACTIONS ━━ */}
                 <div>

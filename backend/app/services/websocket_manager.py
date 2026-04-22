@@ -56,6 +56,11 @@ class WebSocketManager:
         self._thread: Optional[threading.Thread] = None
         self._credentials: dict = {}
 
+        # ── Index streaming ──
+        self._index_clients: set[WebSocket] = set()
+        self._cached_indices: dict = {}
+        self._index_poller_task: Optional[asyncio.Task] = None
+
     @property
     def is_connected(self) -> bool:
         """Check if upstream Angel One WS is active."""
@@ -67,9 +72,105 @@ class WebSocketManager:
         return len(self._clients)
 
     @property
+    def index_client_count(self) -> int:
+        """Number of connected index WS clients."""
+        return len(self._index_clients)
+
+    @property
     def subscribed_token_count(self) -> int:
         """Total number of subscribed tokens across all exchanges."""
         return sum(len(tokens) for tokens in self._subscribed_tokens.values())
+
+    # ── Index client management ──
+
+    async def add_index_client(self, ws: WebSocket) -> None:
+        """Register a frontend client for index streaming."""
+        await ws.accept()
+        self._index_clients.add(ws)
+        logger.info("Index WS client connected. Total: %d", len(self._index_clients))
+
+        # Send cached indices immediately
+        if self._cached_indices:
+            try:
+                await ws.send_json({
+                    "type": "indices_snapshot",
+                    "data": self._cached_indices,
+                })
+            except Exception:
+                pass
+
+        # Start the poller if not running
+        self._ensure_index_poller()
+
+    async def remove_index_client(self, ws: WebSocket) -> None:
+        """Unregister a frontend index client."""
+        self._index_clients.discard(ws)
+        logger.info("Index WS client disconnected. Total: %d", len(self._index_clients))
+
+    async def broadcast_indices(self, data: dict) -> None:
+        """Broadcast index data to ALL connected index clients."""
+        self._cached_indices = data
+        dead: list[WebSocket] = []
+        for client in self._index_clients.copy():
+            try:
+                await client.send_json({
+                    "type": "indices_update",
+                    "data": data,
+                })
+            except Exception:
+                dead.append(client)
+        for dc in dead:
+            self._index_clients.discard(dc)
+
+    def _ensure_index_poller(self) -> None:
+        """Start the yfinance index poller if not already running."""
+        loop = self._loop or asyncio.get_event_loop()
+        if self._index_poller_task is None or self._index_poller_task.done():
+            self._index_poller_task = loop.create_task(self._index_poll_loop())
+            logger.info("Started index poller background task.")
+
+    async def _index_poll_loop(self) -> None:
+        """Background task: poll yfinance every 10s and broadcast indices."""
+        import yfinance as yf
+
+        tickers = {
+            "nifty": "^NSEI", "sensex": "^BSESN", "bankNifty": "^NSEBANK",
+            "niftyIT": "^CNXIT", "niftyPharma": "^CNXPHARMA",
+            "niftyMidcap50": "^NSEMDCP50", "niftyAuto": "^CNXAUTO",
+            "niftyMetal": "^CNXMETAL", "niftyEnergy": "^CNXENERGY",
+            "niftyFMCG": "^CNXFMCG", "niftyRealty": "^CNXREALTY",
+            "niftyFinService": "^CNXFIN", "niftyPSEBank": "^CNXPSUBANK",
+        }
+
+        def _fetch() -> dict:
+            result = {}
+            for key, sym in tickers.items():
+                try:
+                    t = yf.Ticker(sym)
+                    info = t.fast_info
+                    price = getattr(info, "last_price", None) or getattr(info, "previous_close", None)
+                    prev = getattr(info, "previous_close", None)
+                    if price and prev and prev > 0:
+                        chg = round(((price - prev) / prev) * 100, 2)
+                    else:
+                        chg = 0.0
+                    result[key] = {"price": round(float(price), 2) if price else 0, "changePercent": chg}
+                except Exception:
+                    result[key] = {"price": 0, "changePercent": 0}
+            return result
+
+        while True:
+            try:
+                if len(self._index_clients) == 0:
+                    logger.info("No index clients — pausing poller.")
+                    break
+                indices = await asyncio.to_thread(_fetch)
+                if indices:
+                    await self.broadcast_indices(indices)
+                    logger.debug("Broadcasted indices to %d clients", len(self._index_clients))
+            except Exception as exc:
+                logger.warning("Index poll error: %s", exc)
+            await asyncio.sleep(10)
 
     async def add_client(self, ws: WebSocket) -> None:
         """Register a new frontend WebSocket client.

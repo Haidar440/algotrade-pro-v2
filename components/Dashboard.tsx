@@ -292,6 +292,7 @@ const Dashboard: React.FC = () => {
     const runAnalysis = async (symbol: string) => {
         viewBeforeAnalysis.current = currentView;
         setLoading(true); setError(null); setResult(null); setLoadingStep(0);
+        setCurrentView('SCANNER'); // Switch immediately so pipeline spinners are visible
         const interval = setInterval(() => { setLoadingStep(prev => (prev < steps.length - 1 ? prev + 1 : prev)); }, 800);
         try {
             let analyzed = false;
@@ -316,8 +317,6 @@ const Dashboard: React.FC = () => {
                 const aiAnalysis = await analyzeStockTicker(symbol);
                 setResult(aiAnalysis); setLivePrice(aiAnalysis.current_price);
             }
-
-            setCurrentView('SCANNER');
         } catch (err: unknown) { setError(getUserErrorMessage(err, 'generic')); }
         finally { clearInterval(interval); setLoading(false); }
     };

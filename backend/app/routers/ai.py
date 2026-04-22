@@ -414,6 +414,98 @@ async def predict_stock(
     )
 
 
+# ── Index chart symbols for yfinance ──
+_INDEX_YF_MAP = {
+    "nifty": "^NSEI",
+    "sensex": "^BSESN",
+    "bankNifty": "^NSEBANK",
+    "niftyIT": "^CNXIT",
+}
+
+
+@router.get(
+    "/market/chart",
+    summary="Index chart data",
+    description="Intraday OHLCV data for market index charts.",
+)
+async def get_market_chart(
+    index: str = "nifty",
+    period: str = "5d",
+    interval: str = "5m",
+    user: dict = Depends(get_current_user),
+):
+    """Get OHLCV candle data for index charts.
+
+    Args:
+        index: Key from INDEX_YF_MAP (nifty, sensex, bankNifty, niftyIT).
+        period: yfinance period (1d, 5d, 1mo).
+        interval: yfinance interval (1m, 5m, 15m, 1h, 1d).
+
+    Returns:
+        List of {time, open, high, low, close, volume} candles.
+    """
+    import time as _time
+    import yfinance as yf
+    from app.services.async_utils import cached_async
+
+    yf_symbol = _INDEX_YF_MAP.get(index, "^NSEI")
+    cache_key = f"{index}_{period}_{interval}"
+
+    async def _fetch_chart():
+        def _download():
+            t = yf.Ticker(yf_symbol)
+            df = t.history(period=period, interval=interval)
+            if df.empty:
+                return []
+            candles = []
+            for ts, row in df.iterrows():
+                candles.append({
+                    "time": int(ts.timestamp()),
+                    "open": round(float(row["Open"]), 2),
+                    "high": round(float(row["High"]), 2),
+                    "low": round(float(row["Low"]), 2),
+                    "close": round(float(row["Close"]), 2),
+                    "volume": int(row.get("Volume", 0)),
+                })
+            return candles
+
+        import asyncio
+        return await asyncio.to_thread(_download)
+
+    try:
+        candles = await cached_async("chart", cache_key, _fetch_chart, ttl=120)
+        candles = candles or []
+    except Exception as exc:
+        logger.warning("Chart data fetch failed for %s: %s", index, exc)
+        candles = []
+
+    return ApiResponse(data=candles, message=f"{len(candles)} candles for {index}")
+
+
+@router.get(
+    "/news/headlines",
+    summary="Market Headlines",
+    description="Latest market news headlines from RSS feeds (ET, Moneycontrol, LiveMint).",
+)
+async def get_market_headlines(
+    user: dict = Depends(get_current_user),
+):
+    """Get latest market news headlines via fast RSS feeds (90s cache).
+
+    Sources: Economic Times, Moneycontrol, LiveMint — all free, no API key.
+    Returns up to 15 headlines sorted by recency with sentiment tags.
+    """
+    from app.services.market_news_rss import fetch_market_headlines
+
+    try:
+        headlines = await fetch_market_headlines(max_articles=15)
+    except Exception as exc:
+        logger.warning("Headlines fetch failed: %s", exc)
+        headlines = []
+
+    return ApiResponse(data=headlines, message=f"{len(headlines)} headlines")
+
+
 @router.get(
     "/news/market-mood",
     summary="Market Mood",
