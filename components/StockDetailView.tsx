@@ -139,8 +139,8 @@ const StockDetailView: React.FC<StockDetailViewProps> = ({
                         <span>{result.data_timestamp?.split(' ')[0]}</span>
                      </div>
                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${result.market_condition === 'UPTREND' ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' :
-                           result.market_condition === 'DOWNTREND' ? 'text-rose-400 border-rose-500/30 bg-rose-500/10' :
-                              'text-slate-400 border-slate-600 bg-slate-800'
+                        result.market_condition === 'DOWNTREND' ? 'text-rose-400 border-rose-500/30 bg-rose-500/10' :
+                           'text-slate-400 border-slate-600 bg-slate-800'
                         }`}>
                         {result.market_condition}
                      </span>
@@ -187,12 +187,12 @@ const StockDetailView: React.FC<StockDetailViewProps> = ({
 
             <div className="space-y-6">
                <div className={`glass-panel p-6 rounded-xl border flex flex-col items-center justify-center text-center ${result.primary_recommendation.signal === 'BUY' ? 'bg-emerald-500/10 border-emerald-500/20' :
-                     result.primary_recommendation.signal === 'SELL' ? 'bg-rose-500/10 border-rose-500/20' :
-                        'bg-slate-800/50 border-slate-700'
+                  result.primary_recommendation.signal === 'SELL' ? 'bg-rose-500/10 border-rose-500/20' :
+                     'bg-slate-800/50 border-slate-700'
                   }`}>
                   <div className="text-xs font-bold uppercase tracking-widest opacity-70 mb-2">Algorithm Verdict</div>
                   <div className={`text-3xl font-black mb-2 ${result.primary_recommendation.signal === 'BUY' ? 'text-emerald-400' :
-                        result.primary_recommendation.signal === 'SELL' ? 'text-rose-400' : 'text-slate-400'
+                     result.primary_recommendation.signal === 'SELL' ? 'text-rose-400' : 'text-slate-400'
                      }`}>
                      {result.primary_recommendation.signal}
                   </div>
@@ -236,6 +236,14 @@ const StockDetailView: React.FC<StockDetailViewProps> = ({
                currentPrice={livePrice}
                symbol={result.symbol}
                onPaperTrade={handlePaperTradeWrapper}
+               tradeType={result.trade_type}
+               tradeTypeReason={result.trade_type_reason}
+               expectedHolding={result.expected_holding}
+               entryLogic={result.entry_logic}
+               stopLossReason={result.stop_loss_reason}
+               riskPercent={result.risk_percent}
+               backendTargets={result.targets}
+               volume={result.volume}
             />
 
             <div className="grid grid-cols-1">
@@ -286,8 +294,8 @@ const StockDetailView: React.FC<StockDetailViewProps> = ({
                                     </span>
                                  )}
                                  <span className={`text-xs px-2 py-1 rounded-lg font-bold ${bias === 'BULLISH' ? 'bg-emerald-500/10 text-emerald-400' :
-                                       bias === 'BEARISH' ? 'bg-rose-500/10 text-rose-400' :
-                                          'bg-slate-800 text-slate-500'
+                                    bias === 'BEARISH' ? 'bg-rose-500/10 text-rose-400' :
+                                       'bg-slate-800 text-slate-500'
                                     }`}>
                                     {bias}
                                  </span>

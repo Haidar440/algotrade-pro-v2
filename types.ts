@@ -54,35 +54,76 @@ export interface StrategyEvaluation {
   strategy_name: string;
   is_valid: boolean;
   signal: 'BUY' | 'SELL' | 'NO-TRADE';
-  ideal_entry_range: number[]; // Changed from tuple to array for flexibility
+  ideal_entry_range?: number[];
+  entry_range?: number[];
   stop_loss: number;
   target_prices: number[];
-  risk_reward_ratio: number;
-  quality_score: number;
+  risk_reward_ratio?: number;
+  risk_reward?: number;
+  quality_score?: number;
   confidence: number;
   notes: string;
+  trade_type?: string;
 }
 
 export interface Technicals {
   rsi: number;
   adx: number;
-  macd: 'BULLISH' | 'BEARISH'; // Simplified to match Engine
+  macd: 'BULLISH' | 'BEARISH';
   ema_20: number;
   ema_50: number;
   ema_200: number;
   support: number;
   resistance: number;
   volume_status: 'HIGH' | 'AVERAGE';
-  atr14: number; // ✅ REQUIRED for Position Sizing
+  atr14: number;
+  volume_ratio?: number;
+  bb_upper?: number;
+  bb_middle?: number;
+  bb_lower?: number;
+  mfi?: number;
+  vwap?: number;
+}
+
+export interface TargetLevel {
+  price: number;
+  percent_gain: number;
+  logic: string;
+}
+
+export interface VolumeAnalysis {
+  current_volume: number;
+  avg_volume_20d: number;
+  volume_ratio: number;
+  volume_trend: 'ACCUMULATION' | 'DISTRIBUTION' | 'NEUTRAL';
+  breakout_volume_required: number;
+  is_volume_confirming: boolean;
+  up_day_avg_volume: number;
+  down_day_avg_volume: number;
+}
+
+export interface SRLevels {
+  support: number;
+  resistance: number;
+  pivot: number;
+  s1: number;
+  s2: number;
+  r1: number;
+  r2: number;
+  demand_zone: number[];
+  supply_zone: number[];
+  swing_lows: number[];
+  swing_highs: number[];
 }
 
 export interface PrimaryRecommendation {
   strategy_name: string;
   signal: 'BUY' | 'SELL' | 'NO-TRADE' | 'STRONG BUY';
-  ideal_entry_range: number[];
+  ideal_entry_range?: number[];
   stop_loss: number;
-  target_prices: number[];
-  risk_reward_ratio: number;
+  target_prices?: number[];
+  target_price?: number;
+  risk_reward_ratio?: number;
   confidence: number;
   reason: string;
 }
@@ -92,13 +133,32 @@ export interface AnalysisResult {
   timeframe: string;
   market_condition: 'UPTREND' | 'DOWNTREND' | 'RANGE-BOUND';
   current_price: number;
-  previous_close: number; // ✅ NEW FIELD
+  previous_close: number;
   data_timestamp: string;
   technicals: Technicals;
   strategies_evaluated: StrategyEvaluation[];
   primary_recommendation: PrimaryRecommendation;
   disclaimer: string;
   groundingUrls?: string[];
+
+  // ── Backend-driven fields (new) ──
+  trade_type?: string;
+  trade_type_reason?: string;
+  expected_holding?: string;
+  exact_entry?: number;
+  entry_range?: number[];
+  entry_logic?: string;
+  stop_loss?: number;
+  stop_loss_reason?: string;
+  risk_percent?: number;
+  targets?: TargetLevel[];
+  risk_reward_ratio?: number;
+  volume?: VolumeAnalysis;
+  sr_levels?: SRLevels;
+  signal?: string;
+  confidence?: number;
+  reason?: string;
+  candles?: Candle[];
 }
 export interface AngelCredentials {
   clientCode: string;   // ✅ Required

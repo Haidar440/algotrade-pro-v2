@@ -490,3 +490,123 @@ class OptimizeResult(BaseModel):
     symbol: str = ""
     error: Optional[str] = None
 
+
+# ━━━━━━━━━━━━━━━ Full Analysis Schemas (Backend-Driven) ━━━━━━━━━━━━━━━
+
+
+class CandleSchema(BaseModel):
+    """Single OHLCV candle for chart rendering."""
+
+    date: str
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: int
+
+
+class TargetSchema(BaseModel):
+    """A single price target with logic."""
+
+    price: float
+    percent_gain: float
+    logic: str
+
+
+class VolumeSchema(BaseModel):
+    """Volume analysis breakdown."""
+
+    current_volume: int = 0
+    avg_volume_20d: int = 0
+    volume_ratio: float = 1.0
+    volume_trend: str = "NEUTRAL"
+    breakout_volume_required: int = 0
+    is_volume_confirming: bool = False
+    up_day_avg_volume: int = 0
+    down_day_avg_volume: int = 0
+
+
+class SRLevelsSchema(BaseModel):
+    """Support/Resistance levels."""
+
+    support: float = 0.0
+    resistance: float = 0.0
+    pivot: float = 0.0
+    s1: float = 0.0
+    s2: float = 0.0
+    r1: float = 0.0
+    r2: float = 0.0
+    demand_zone: list[float] = Field(default_factory=lambda: [0.0, 0.0])
+    supply_zone: list[float] = Field(default_factory=lambda: [0.0, 0.0])
+    swing_lows: list[float] = Field(default_factory=list)
+    swing_highs: list[float] = Field(default_factory=list)
+
+
+class StrategySchema(BaseModel):
+    """A single strategy evaluation result."""
+
+    strategy_name: str
+    is_valid: bool
+    signal: str
+    confidence: float
+    risk_reward: float
+    notes: str
+    entry_range: list[float] = Field(default_factory=list)
+    stop_loss: float = 0.0
+    target_prices: list[float] = Field(default_factory=list)
+    trade_type: str = "SWING"
+
+
+class FullAnalysisSchema(BaseModel):
+    """Complete stock analysis — the SINGLE response for frontend.
+
+    Frontend renders this directly. Zero calculations in React.
+    """
+
+    # Identity
+    symbol: str
+    current_price: float
+    previous_close: float
+    market_condition: str
+    data_timestamp: str
+    timeframe: str = "Daily"
+
+    # Trade Classification
+    trade_type: str = "SWING"
+    trade_type_reason: str = ""
+    expected_holding: str = "3-7 days"
+
+    # Smart Entry
+    exact_entry: float = 0.0
+    entry_range: list[float] = Field(default_factory=list)
+    entry_logic: str = ""
+    stop_loss: float = 0.0
+    stop_loss_reason: str = ""
+    risk_percent: float = 0.0
+
+    # S/R-Based Targets
+    targets: list[TargetSchema] = Field(default_factory=list)
+    risk_reward_ratio: float = 0.0
+
+    # Volume Analysis
+    volume: Optional[VolumeSchema] = None
+
+    # Support/Resistance
+    sr_levels: Optional[SRLevelsSchema] = None
+
+    # Raw Technicals (for panels)
+    technicals: Optional[dict] = None
+
+    # Strategy Matrix
+    strategies: list[StrategySchema] = Field(default_factory=list)
+    primary_strategy: str = "No Trade Setup"
+    confidence: float = 0.0
+    signal: str = "NO-TRADE"
+    reason: str = ""
+
+    # Chart candles (last 60)
+    candles: list[CandleSchema] = Field(default_factory=list)
+
+    disclaimer: str = "Algorithmic analysis. Not financial advice. Verify before trading."
+
+

@@ -3,7 +3,7 @@ import { AnalysisResult, LoadingStep, PaperTrade, View, BrokerState, SignalFeedI
 import { INDIAN_STOCKS } from '../services/stockData';
 import { streamer } from '../services/streaming';
 import { AngelOne } from '../services/angel';
-import { TechnicalAnalysisEngine } from '../services/technicalAnalysis';
+import { TechnicalAnalysisEngine } from '../services/technicalAnalysis'; // kept for positionSize()
 import { analyzeStockTicker, fetchMarketIndices } from '../services/gemini';
 import { AutoTrader, AutoTraderConfig } from '../services/autoTrader';
 import { DB_SERVICE } from '../services/db';
@@ -150,7 +150,8 @@ const Dashboard: React.FC = () => {
                 try {
                     const history = await angel.getHistoricalData(stock.symbol.replace('.NS', ''), "ONE_DAY", 100);
                     if (history && history.length > 50) {
-                        const analysis = TechnicalAnalysisEngine.analyze(stock.symbol, history);
+                        // Use backend API for analysis (single source of truth)
+                        const analysis = await analyzeStockTicker(stock.symbol.replace('.NS', ''));
                         const rec = analysis.primary_recommendation;
                         let finalSignal: 'STRONG BUY' | 'BUY' | 'SELL' | 'NEUTRAL' = 'NEUTRAL';
                         if (rec.signal === 'BUY') finalSignal = rec.confidence > 0.8 ? 'STRONG BUY' : 'BUY';
@@ -295,28 +296,9 @@ const Dashboard: React.FC = () => {
         setCurrentView('SCANNER'); // Switch immediately so pipeline spinners are visible
         const interval = setInterval(() => { setLoadingStep(prev => (prev < steps.length - 1 ? prev + 1 : prev)); }, 800);
         try {
-            let analyzed = false;
-
-            // Tier 1: Try Angel One if connected
-            if (brokerState.angel) {
-                try {
-                    const angel = new AngelOne(brokerState.angel, handleSessionUpdate);
-                    const history = await angel.getHistoricalData(symbol, "ONE_DAY", 120);
-                    if (history && history.length >= 50) {
-                        const analysis = TechnicalAnalysisEngine.analyze(symbol, history);
-                        setResult(analysis); setLivePrice(analysis.current_price);
-                        analyzed = true;
-                    }
-                } catch (angelErr) {
-                    console.warn("Angel One fetch failed, falling back to backend API:", angelErr);
-                }
-            }
-
-            // Tier 2: Fallback to backend API (yfinance)
-            if (!analyzed) {
-                const aiAnalysis = await analyzeStockTicker(symbol);
-                setResult(aiAnalysis); setLivePrice(aiAnalysis.current_price);
-            }
+            // Always use backend API — single source of truth
+            const aiAnalysis = await analyzeStockTicker(symbol);
+            setResult(aiAnalysis); setLivePrice(aiAnalysis.current_price);
         } catch (err: unknown) { setError(getUserErrorMessage(err, 'generic')); }
         finally { clearInterval(interval); setLoading(false); }
     };
