@@ -17,6 +17,7 @@ import Navbar from './Navbar';
 import StrategyGuide from './StrategyGuide';
 import SettingsModal from './SettingsModal';
 import PythonLab from './PythonLab';
+import StockScreener from './StockScreener';
 import BacktestDashboard from './BacktestDashboard';
 import SignalFeedCard from './SignalFeedCard';
 import BottomNav from './BottomNav';
@@ -478,6 +479,7 @@ const Dashboard: React.FC = () => {
                         {currentView === 'BACKTEST' && <BacktestDashboard brokerState={brokerState} />}
                         {currentView === 'STRATEGIES' && <StrategyGuide />}
                         {currentView === 'PYTHON_LAB' && <div className="h-full"><PythonLab data={result} brokerState={brokerState} /></div>}
+                        {currentView === 'SCREENER' && <StockScreener />}
                         {currentView === 'AI_PICKS' && <AiPicksDashboard />}
                         {currentView === 'ANALYTICS' && <AnalyticsDashboard />}
                         {/* Keep-alive: News + Intelligence stay mounted so scans persist across tab switches */}

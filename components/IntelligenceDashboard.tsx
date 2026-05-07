@@ -58,6 +58,32 @@ interface IntelligenceReport {
     providers_used: string[];
 }
 
+interface BreakoutCandidate {
+    stock: string;
+    current_price: number;
+    resistance: number;
+    support: number;
+    distance_pct: number;
+    volume_signal: string;
+    breakout_type: string;
+    probability: string;
+}
+
+interface SectorFocus {
+    sector: string;
+    stance: string;
+    reason: string;
+    top_stock: string;
+    momentum: number;
+}
+
+interface RiskWarning {
+    event: string;
+    impact: string;
+    affected_sectors: string[];
+    action: string;
+}
+
 // ━━━━━━━━━━━━━━━ Component ━━━━━━━━━━━━━━━
 
 const IntelligenceDashboard: React.FC = () => {
@@ -444,6 +470,113 @@ const IntelligenceDashboard: React.FC = () => {
                                     <span className="text-emerald-400">₹{gem.target}</span>
                                     <span className="text-slate-600">|</span>
                                     <span className="text-rose-400">SL: ₹{gem.stop_loss}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* ━━━ Breakout Radar ━━━ */}
+            {report?.selections?.breakout_candidates?.length > 0 && (
+                <div className="bg-gradient-to-r from-cyan-500/5 to-blue-500/5 border border-cyan-500/20 rounded-2xl p-6">
+                    <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                        <Zap className="w-5 h-5 text-cyan-400" /> Breakout Radar
+                        <span className="text-[10px] bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded uppercase font-bold ml-2">Near Key Levels</span>
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {report.selections.breakout_candidates.map((b: BreakoutCandidate) => (
+                            <div key={b.stock} className="bg-slate-900/80 rounded-xl p-4 border border-cyan-500/10 hover:border-cyan-500/30 transition-colors">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-sm font-black text-white">{b.stock}</span>
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                                        b.probability === 'HIGH' ? 'bg-emerald-500/20 text-emerald-400' :
+                                        b.probability === 'MEDIUM' ? 'bg-amber-500/20 text-amber-400' :
+                                        'bg-slate-700 text-slate-400'
+                                    }`}>{b.probability}</span>
+                                </div>
+                                <div className="text-xl font-black text-white mb-2">₹{b.current_price?.toLocaleString('en-IN')}</div>
+                                <div className="grid grid-cols-2 gap-2 mb-2 text-[11px]">
+                                    <div className="bg-slate-800/80 rounded-lg p-1.5 text-center">
+                                        <div className="text-slate-500 uppercase font-bold">Support</div>
+                                        <div className="text-emerald-400 font-bold">₹{b.support?.toLocaleString('en-IN')}</div>
+                                    </div>
+                                    <div className="bg-slate-800/80 rounded-lg p-1.5 text-center">
+                                        <div className="text-slate-500 uppercase font-bold">Resistance</div>
+                                        <div className="text-rose-400 font-bold">₹{b.resistance?.toLocaleString('en-IN')}</div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center justify-between text-[11px]">
+                                    <span className={`font-bold ${b.breakout_type === 'RESISTANCE' ? 'text-cyan-400' : 'text-amber-400'}`}>
+                                        {b.distance_pct?.toFixed(1)}% to {b.breakout_type?.toLowerCase()}
+                                    </span>
+                                </div>
+                                <p className="text-[11px] text-slate-400 mt-1.5">{b.volume_signal}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* ━━━ Sector Pulse ━━━ */}
+            {report?.selections?.sector_focus?.length > 0 && (
+                <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6">
+                    <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                        <BarChart3 className="w-5 h-5 text-violet-400" /> Sector Pulse
+                        <span className="text-xs text-slate-500">Focus areas based on catalysts</span>
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        {report.selections.sector_focus.map((s: SectorFocus) => (
+                            <div key={s.sector} className="bg-slate-800/60 rounded-xl p-4 hover:bg-slate-800 transition-colors">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-sm font-bold text-white">{s.sector}</span>
+                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${
+                                        s.stance === 'BULLISH' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' :
+                                        s.stance === 'BEARISH' ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' :
+                                        'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                                    }`}>{s.stance}</span>
+                                </div>
+                                <p className="text-xs text-slate-400 mb-3">{s.reason}</p>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[10px] text-slate-500">Top pick: <span className="text-white font-bold">{s.top_stock}</span></span>
+                                    <div className="flex items-center gap-1.5">
+                                        <div className="w-12 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                                            <div className={`h-full rounded-full ${s.momentum >= 70 ? 'bg-emerald-500' : s.momentum >= 40 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                                                style={{ width: `${s.momentum}%` }} />
+                                        </div>
+                                        <span className="text-[10px] text-slate-400 font-mono">{s.momentum}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* ━━━ Risk Warnings ━━━ */}
+            {report?.selections?.risk_warnings?.length > 0 && (
+                <div className="bg-gradient-to-r from-rose-500/5 to-orange-500/5 border border-rose-500/20 rounded-2xl p-6">
+                    <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                        <Shield className="w-5 h-5 text-rose-400" /> Risk Warnings
+                        <span className="text-[10px] bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded uppercase font-bold ml-2">Must Know</span>
+                    </h3>
+                    <div className="space-y-3">
+                        {report.selections.risk_warnings.map((w: RiskWarning, i: number) => (
+                            <div key={i} className="bg-slate-900/80 rounded-xl p-4 border border-rose-500/10">
+                                <div className="flex items-start gap-3">
+                                    <div className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 ${w.impact === 'HIGH' ? 'bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.6)]' : 'bg-amber-400'}`} />
+                                    <div className="flex-1">
+                                        <p className="text-sm font-bold text-white">{w.event}</p>
+                                        <p className="text-xs text-amber-300 mt-1">⚡ Action: {w.action}</p>
+                                        {w.affected_sectors?.length > 0 && (
+                                            <div className="flex gap-1 mt-2">
+                                                {w.affected_sectors.map((s: string) => (
+                                                    <span key={s} className="text-[10px] bg-rose-500/10 text-rose-300 px-1.5 py-0.5 rounded border border-rose-500/20">{s}</span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${w.impact === 'HIGH' ? 'bg-rose-500/20 text-rose-400' : 'bg-amber-500/20 text-amber-400'}`}>{w.impact}</span>
                                 </div>
                             </div>
                         ))}

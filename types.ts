@@ -32,7 +32,8 @@ export type View =
   | 'NEWS'
   | 'AI_PICKS'
   | 'ANALYTICS'
-  | 'INTELLIGENCE';
+  | 'INTELLIGENCE'
+  | 'SCREENER';
 export interface Stock {
   symbol: string;
   name: string;

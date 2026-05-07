@@ -23,7 +23,7 @@ from app.config import settings
 from app.database import close_db, init_db
 from app.logging_config import setup_logging
 from app.middleware import setup_exception_handlers, setup_middleware
-from app.routers import ai, analysis, auth, backtest, broker, health, intelligence, telegram, trades, watchlists, websocket
+from app.routers import ai, analysis, auth, backtest, broker, health, intelligence, screener, telegram, trades, watchlists, websocket
 from app.services.telegram_bot import telegram_bot
 
 logger = logging.getLogger(__name__)
@@ -109,6 +109,7 @@ app.include_router(backtest.router)
 app.include_router(telegram.router)
 app.include_router(websocket.router)
 app.include_router(intelligence.router)
+app.include_router(screener.router)
 
 
 # ━━━━━━━━━━━━━━━ Root ━━━━━━━━━━━━━━━

@@ -88,6 +88,9 @@ class SelectionResult:
     """Output from the Stock Selector agent."""
     top_picks: list[ScoredStock] = field(default_factory=list)
     hidden_gems: list[ScoredStock] = field(default_factory=list)
+    breakout_candidates: list[dict] = field(default_factory=list)
+    sector_focus: list[dict] = field(default_factory=list)
+    risk_warnings: list[dict] = field(default_factory=list)
     total_analyzed: int = 0
     llm_provider: str = ""
     latency_ms: int = 0
@@ -96,6 +99,9 @@ class SelectionResult:
         return {
             "top_picks": [s.to_dict() for s in self.top_picks],
             "hidden_gems": [s.to_dict() for s in self.hidden_gems],
+            "breakout_candidates": self.breakout_candidates,
+            "sector_focus": self.sector_focus,
+            "risk_warnings": self.risk_warnings,
             "total_analyzed": self.total_analyzed,
             "llm_provider": self.llm_provider,
             "latency_ms": self.latency_ms,
@@ -245,6 +251,35 @@ For EACH stock, evaluate and respond in STRICT JSON:
             "stop_loss": 95.0,
             "target": 115.0
         }}
+    ],
+    "breakout_candidates": [
+        {{
+            "stock": "TATAMOTORS",
+            "current_price": 950.0,
+            "resistance": 980.0,
+            "support": 920.0,
+            "distance_pct": 3.1,
+            "volume_signal": "Accumulation detected",
+            "breakout_type": "RESISTANCE",
+            "probability": "HIGH"
+        }}
+    ],
+    "sector_focus": [
+        {{
+            "sector": "Banking",
+            "stance": "BULLISH",
+            "reason": "RBI policy support + credit growth",
+            "top_stock": "HDFCBANK",
+            "momentum": 78
+        }}
+    ],
+    "risk_warnings": [
+        {{
+            "event": "US Fed rate decision tomorrow",
+            "impact": "HIGH",
+            "affected_sectors": ["IT", "Banking"],
+            "action": "Reduce overnight positions in IT"
+        }}
     ]
 }}
 
@@ -262,7 +297,10 @@ Rules:
 - Stop loss: 2-3% below entry
 - Target: 3-8% above entry (short-term 1-3 days)
 - Include at least 1 hidden gem from 2nd/3rd order effects
-- MUST include entry, stop_loss, target for every pick"""
+- MUST include entry, stop_loss, target for every pick
+- breakout_candidates: 3-5 stocks closest to key resistance/support levels (within 5%)
+- sector_focus: top 3-4 sectors ranked by momentum and catalyst alignment
+- risk_warnings: 2-3 major risks for today/tomorrow that traders MUST know"""
 
         try:
             router = self._get_router()
@@ -320,8 +358,11 @@ Rules:
                 ))
 
             return SelectionResult(
-                top_picks=top_picks[:10],  # Top 10
+                top_picks=top_picks[:10],
                 hidden_gems=hidden_gems[:3],
+                breakout_candidates=parsed.get("breakout_candidates", []),
+                sector_focus=parsed.get("sector_focus", []),
+                risk_warnings=parsed.get("risk_warnings", []),
                 llm_provider=response.provider,
             )
 
