@@ -14,7 +14,8 @@ import {
   LogOut,
   Target,
   BarChart3,
-  Home
+  Home,
+  Filter
 } from 'lucide-react';
 import { View } from '../types';
 import { useAuth } from './AuthContext';
@@ -199,13 +200,13 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onSelectView, isOpen, onC
             <Newspaper className="w-5 h-5" /> News Intelligence
           </button>
 
-          {/* Python Lab */}
+          {/* Stock Screener */}
           <button
-            onClick={() => { onSelectView('PYTHON_LAB'); onClose(); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeView === 'PYTHON_LAB' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+            onClick={() => { onSelectView('SCREENER'); onClose(); }}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeView === 'SCREENER' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
               }`}
           >
-            <Terminal className="w-5 h-5" /> Python Lab
+            <Filter className="w-5 h-5" /> Stock Screener
           </button>
 
           {/* Strategy Guide */}
