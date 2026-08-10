@@ -62,10 +62,6 @@ class Settings(BaseSettings):
     ANGEL_PASSWORD: Optional[str] = Field(default=None, description="Angel One PIN/password")
     ANGEL_TOTP_SECRET: Optional[str] = Field(default=None, description="Angel One TOTP seed")
 
-    # ━━━━ Broker: Zerodha (optional) ━━━━
-    ZERODHA_API_KEY: Optional[str] = Field(default=None, description="Zerodha Kite API key")
-    ZERODHA_API_SECRET: Optional[str] = Field(default=None, description="Zerodha Kite API secret")
-
     # ━━━━ External APIs (optional) ━━━━
 
     GNEWS_API_KEY: Optional[str] = Field(default=None, description="GNews API key (free tier: 100 req/day)")
@@ -175,7 +171,7 @@ class Settings(BaseSettings):
         """Check if all required credentials exist for a broker.
 
         Args:
-            broker: Broker name ('angel' or 'zerodha').
+            broker: Broker name ('angel' or 'paper').
 
         Returns:
             True if all required credentials are present.
@@ -187,8 +183,6 @@ class Settings(BaseSettings):
                 self.ANGEL_PASSWORD,
                 self.ANGEL_TOTP_SECRET,
             ])
-        if broker == "zerodha":
-            return all([self.ZERODHA_API_KEY, self.ZERODHA_API_SECRET])
         return False
 
     @property

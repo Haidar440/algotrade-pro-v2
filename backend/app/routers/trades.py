@@ -79,14 +79,16 @@ async def create_trade(
 )
 async def list_trades(
     status: Optional[TradeStatus] = Query(default=None, description="Filter by status"),
+    source: Optional[str] = Query(default=None, description="Filter by source (e.g. PAPER, BOT_LIVE, MANUAL)"),
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int = Query(default=100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[list[TradeResponse]]:
     """Retrieve trades with optional filtering and pagination.
 
     Args:
         status: Optional filter — OPEN or CLOSED.
+        source: Optional filter — PAPER, BOT_LIVE, MANUAL, etc.
         skip: Number of records to skip (for pagination).
         limit: Maximum number of records to return.
         db: Database session (injected).
@@ -98,6 +100,8 @@ async def list_trades(
 
     if status:
         query = query.where(Trade.status == status.value)
+    if source:
+        query = query.where(Trade.source == source.upper())
 
     result = await db.execute(query)
     trades = result.scalars().all()

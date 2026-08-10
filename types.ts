@@ -28,7 +28,6 @@ export type View =
   | 'TRADE_HISTORY'
   | 'BACKTEST'
   | 'STRATEGIES'
-  | 'PYTHON_LAB'
   | 'NEWS'
   | 'AI_PICKS'
   | 'ANALYTICS'

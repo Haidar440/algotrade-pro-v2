@@ -828,7 +828,6 @@ class GeminiNewsService:
             "blinkx.in": "Blinkx Finance",
             "investing.com": "Investing.com",
             "tradingview.com": "TradingView",
-            "zerodha.com": "Zerodha",
             "5paisa.com": "5Paisa",
             "angelone.in": "Angel One",
             "upstox.com": "Upstox",

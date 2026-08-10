@@ -3,7 +3,8 @@ import { BrokerState } from '../types';
 import { AngelOne } from '../services/angel';
 import { securePost } from '../services/api';
 import { getUserErrorMessage } from '../services/errorMessages';
-import { X, Save, AlertTriangle, CheckCircle2, Eye, EyeOff, Loader2, RefreshCw } from 'lucide-react';
+import { useBroker } from '../contexts/BrokerContext';
+import { X, Save, AlertTriangle, CheckCircle2, Eye, EyeOff, Loader2 } from 'lucide-react';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -12,7 +13,12 @@ interface SettingsModalProps {
   onSaveBrokerState: (state: BrokerState) => void;
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, brokerState, onSaveBrokerState }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, brokerState: propBrokerState, onSaveBrokerState }) => {
+  const { brokerState: ctxBrokerState, setBrokerState: ctxSetBrokerState } = useBroker();
+  // Prefer context state; fall back to prop (for backward compat)
+  const brokerState = ctxBrokerState || propBrokerState;
+  const setBrokerStateCtx = ctxSetBrokerState;
+
   const [activeTab, setActiveTab] = useState<'ANGEL' | 'GENERAL'>('ANGEL');
   
   const [apiKey, setApiKey] = useState(brokerState.angel?.apiKey || '');
@@ -37,7 +43,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, brokerSt
       const angel = new AngelOne({ apiKey });
       const session = await angel.login(clientCode, pin, totp);
 
-      onSaveBrokerState({
+      const newState = {
         ...brokerState,
         angel: {
           apiKey,
@@ -46,7 +52,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, brokerSt
           refreshToken: session.refreshToken,
           feedToken: session.feedToken,
         }
-      });
+      };
+
+      // Update context (single source of truth — also handles localStorage)
+      setBrokerStateCtx(newState);
+      // Also call prop callback for backward compatibility
+      if (onSaveBrokerState) onSaveBrokerState(newState);
 
       setSuccess("Successfully connected to Angel One!");
       setPin(''); 
@@ -59,14 +70,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, brokerSt
   };
 
   const handleDisconnect = async () => {
-      try {
-        // Disconnect from backend broker too
-        await securePost('/broker/disconnect', {});
-      } catch (e) { console.warn("Backend disconnect failed (may already be disconnected)"); }
-      onSaveBrokerState({ ...brokerState, angel: undefined }); // Clear State
-      setApiKey('');
-      setClientCode('');
-      setSuccess("Disconnected successfully.");
+    try {
+      await securePost('/broker/disconnect', {});
+    } catch (e) { console.warn("Backend disconnect failed (may already be disconnected)"); }
+    const newState = { ...brokerState, angel: undefined };
+    setBrokerStateCtx(newState);
+    if (onSaveBrokerState) onSaveBrokerState(newState);
+    setApiKey('');
+    setClientCode('');
+    setSuccess("Disconnected successfully.");
   };
 
   return (

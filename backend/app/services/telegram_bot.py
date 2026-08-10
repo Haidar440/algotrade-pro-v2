@@ -30,6 +30,8 @@ class TelegramBotService:
         self._polling_thread: Optional[threading.Thread] = None
         self._polling_active = False
         self._last_update_id = 0
+        self._consecutive_errors = 0
+        self._max_backoff = 300  # 5 minutes max
 
     def _check_auth(self, chat_id: int) -> bool:
         """Check if user is allowed to interact with the bot."""
@@ -130,10 +132,14 @@ class TelegramBotService:
                 logger.error(f"getUpdates failed: {data}")
                 return []
         except requests.exceptions.Timeout:
+            self._consecutive_errors = 0  # Timeouts are normal
             return []  # Normal for long-polling
         except Exception as e:
-            logger.error(f"Polling error: {e}")
-            time.sleep(3)  # Back off on errors
+            self._consecutive_errors += 1
+            backoff = min(3 * (2 ** (self._consecutive_errors - 1)), self._max_backoff)
+            if self._consecutive_errors <= 3 or self._consecutive_errors % 20 == 0:
+                logger.error("Polling error (attempt %d, next retry in %ds): %s", self._consecutive_errors, backoff, str(e)[:100])
+            time.sleep(backoff)
             return []
 
     def _polling_loop(self):

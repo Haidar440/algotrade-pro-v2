@@ -5,7 +5,7 @@ import {
     Cpu, ArrowUpRight, ArrowDownRight, Minus, BarChart3, Newspaper,
     Target, GitBranch, Sparkles, Loader2, CheckCircle2, XCircle
 } from 'lucide-react';
-import { secureGet, securePost } from '../services/api';
+import { secureGet, securePost, SCAN_TIMEOUT_MS } from '../services/api';
 
 // ━━━━━━━━━━━━━━━ Types ━━━━━━━━━━━━━━━
 
@@ -132,7 +132,7 @@ const IntelligenceDashboard: React.FC = () => {
 
     const fetchProviders = async () => {
         try {
-            const res = await secureGet('/intelligence/providers');
+            const res = await secureGet('/intelligence/providers', SCAN_TIMEOUT_MS);
             setProviders(res.providers || []);
             setTaskAssignments(res.task_assignments || {});
         } catch (e: any) {
@@ -142,7 +142,7 @@ const IntelligenceDashboard: React.FC = () => {
 
     const fetchLatestReport = async () => {
         try {
-            const res = await secureGet('/intelligence/latest');
+            const res = await secureGet('/intelligence/latest', SCAN_TIMEOUT_MS);
             if (res.status === 'cached' && res.report) {
                 setReport(res.report);
                 setScanStatus('completed');

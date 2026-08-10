@@ -1,0 +1,26 @@
+sequenceDiagram
+    participant Exchange as Angel One Broker
+    participant WSM as Singleton WebSocket Manager
+    participant Trader as AutoTrader Engine
+    participant ClientA as Client Dashboard (User A)
+    participant ClientB as Client Dashboard (User B)
+
+    Exchange->>WSM: Raw Tick Stream (e.g., RELIANCE, TCS)
+    WSM->>WSM: Parse & Update Local Tick Cache
+    
+    par Fan-Out to Subscribed Clients
+        WSM->>ClientA: Broadcast RELIANCE Tick
+        WSM->>ClientB: Broadcast TCS Tick
+    end
+
+    par Trigger Execution Logic
+        WSM->>Trader: Push Tick to Evaluation Queue
+        Trader->>Trader: Calculate Indicators (RSI, MACD)
+        alt Signal Triggered
+            Trader->>Exchange: Execute Buy/Sell Order
+            Trader->>WSM: Broadcast Order Status
+            WSM->>ClientA: Notify Order Success
+        else No Signal
+            Trader-->>Trader: Ignore
+        end
+    end

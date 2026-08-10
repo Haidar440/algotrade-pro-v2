@@ -2,7 +2,7 @@
 Module: app/services/broker_interface.py
 Purpose: Unified broker abstraction — one interface, any broker.
 
-All broker implementations (Angel One, Zerodha, Paper) must implement
+All broker implementations (Angel One, Paper) must implement
 this interface. This ensures the rest of the application is completely
 decoupled from any specific broker's API.
 

@@ -1,5 +1,5 @@
 import { AnalysisResult, MarketIndices, NewsAnalysisResult } from "../types";
-import { api, secureGet } from './api';
+import { api, secureGet, SCAN_TIMEOUT_MS } from './api';
 
 // Types from original file
 export interface AIPrediction {
@@ -27,7 +27,7 @@ export const getGeminiPrediction = async (
   historyString: string
 ): Promise<AIPrediction> => {
   try {
-    const res: any = await secureGet(`/ai/predict/${symbol}`);
+    const res: any = await secureGet(`/ai/predict/${symbol}`, SCAN_TIMEOUT_MS);
 
     // Use backend values, fall back to frontend analysis data for support/resistance
     const support = res.stop_loss || analysis?.technicals?.support || currentPrice * 0.97;
@@ -59,8 +59,8 @@ export const getGeminiPrediction = async (
 // is done in Python. This function only calls the API and maps the response.
 export const analyzeStockTicker = async (ticker: string): Promise<AnalysisResult> => {
   try {
-    // Call the new backend-driven analysis endpoint
-    const res: any = await secureGet(`/analysis/${ticker}`);
+    // Call backend analysis — uses yfinance + TA-Lib, can take 10-30s
+    const res: any = await secureGet(`/analysis/${ticker}`, SCAN_TIMEOUT_MS);
 
     // Map strategies from backend format to frontend StrategyEvaluation
     const strategies = (res.strategies || []).map((s: any) => ({
@@ -136,7 +136,7 @@ export const analyzeStockTicker = async (ticker: string): Promise<AnalysisResult
 export const analyzeStockNews = async (query: string): Promise<NewsAnalysisResult> => {
   try {
     const symbol = query.split(' ')[0].toUpperCase().replace(/[^A-Z0-9]/g, '');
-    const res: any = await secureGet(`/ai/news/${symbol}?with_sentiment=true`);
+    const res: any = await secureGet(`/ai/news/${symbol}?with_sentiment=true`, SCAN_TIMEOUT_MS);
 
     // Backend now returns sentiment directly from Gemini (always -100..100)
     const score = res.sentiment_score ?? 0;
@@ -279,7 +279,7 @@ export interface StockPicksResult {
 
 export const fetchAIStockPicks = async (capital: number = 100000): Promise<StockPicksResult> => {
   try {
-    const res: any = await secureGet(`/ai/picks?capital=${capital}`);
+    const res: any = await secureGet(`/ai/picks?capital=${capital}`, SCAN_TIMEOUT_MS);
     return {
       capital: res.capital || capital,
       total_scanned: res.total_scanned || 0,

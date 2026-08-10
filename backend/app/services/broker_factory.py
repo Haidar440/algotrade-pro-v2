@@ -19,7 +19,7 @@ def create_broker(broker_name: BrokerName) -> BrokerInterface:
     """Create a broker instance based on the broker name.
 
     Args:
-        broker_name: Which broker to create (ANGEL, ZERODHA, or PAPER).
+        broker_name: Which broker to create (ANGEL or PAPER).
 
     Returns:
         An unconnected BrokerInterface implementation.
@@ -31,11 +31,6 @@ def create_broker(broker_name: BrokerName) -> BrokerInterface:
         from app.services.angel_broker import AngelOneBroker
         logger.info("Creating Angel One broker instance")
         return AngelOneBroker()
-
-    if broker_name == BrokerName.ZERODHA:
-        from app.services.zerodha_broker import ZerodhaBroker
-        logger.info("Creating Zerodha broker instance")
-        return ZerodhaBroker()
 
     if broker_name == BrokerName.PAPER:
         from app.services.paper_trader import PaperTrader

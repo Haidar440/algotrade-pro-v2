@@ -189,7 +189,7 @@ class HealthResponse(BaseModel):
 class BrokerConnectRequest(BaseModel):
     """Request body for connecting to a broker."""
 
-    broker: str = Field(..., examples=["angel", "zerodha", "paper"], description="Broker name")
+    broker: str = Field(..., examples=["angel", "paper"], description="Broker name")
     # Optional: Frontend can send credentials directly (encrypted in transit via HTTPS)
     api_key: Optional[str] = Field(default=None, description="Broker API key (optional, falls back to .env)")
     client_id: Optional[str] = Field(default=None, description="Client ID / code (optional)")

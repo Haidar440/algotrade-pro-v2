@@ -1,0 +1,14 @@
+graph LR
+    UserRequest[User Requests AI Analysis] --> Logic{Quota Available?}
+    
+    Logic -- Yes --> API[Call Google Gemini API]
+    API --> Success{Response OK?}
+    
+    Success -- Yes --> ReturnAI[Return AI Insights]
+    
+    Logic -- No / Rate Limited --> CircuitBreaker[Trigger Circuit Breaker]
+    Success -- No / Timeout --> CircuitBreaker
+    
+    CircuitBreaker --> Cache[Fetch Last Cached Analysis]
+    Cache --> FallbackMsg[Append Fallback Warning]
+    FallbackMsg --> ReturnAI

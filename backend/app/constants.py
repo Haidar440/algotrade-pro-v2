@@ -78,7 +78,6 @@ class MarketCondition(str, Enum):
 class BrokerName(str, Enum):
     """Supported broker integrations."""
     ANGEL = "angel"
-    ZERODHA = "zerodha"
     PAPER = "paper"
 
 

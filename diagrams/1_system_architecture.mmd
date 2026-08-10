@@ -1,0 +1,43 @@
+graph TD
+    %% Frontend Layer
+    subgraph Frontend [Client Interface - React/Vite]
+        UI[Dashboard UI]
+        Charts[Lightweight Charts]
+        BotControl[Bot Control Panel]
+    end
+
+    %% Backend Layer
+    subgraph Backend [Backend API - FastAPI]
+        Router[API Routers]
+        Service[Business Logic Services]
+        WS[Singleton WebSocket Manager]
+        Trader[AutoTrader Engine]
+    end
+
+    %% Database Layer
+    subgraph Persistence [Data Layer - PostgreSQL]
+        DB[(PostgreSQL Database)]
+        ORM[SQLAlchemy 2.0 / asyncpg]
+    end
+
+    %% External Services
+    subgraph External [External Integrations]
+        BrokerAPI[Angel One SmartAPI]
+        WSTick[SmartWebSocketV2]
+        Gemini[Google Gemini AI]
+    end
+
+    %% Connections
+    UI <-->|HTTPS/REST| Router
+    Charts <-->|WebSocket| WS
+    Router <--> Service
+    WS <--> Service
+    Service <--> ORM
+    Trader <--> ORM
+    ORM <--> DB
+
+    Service <-->|API Calls| BrokerAPI
+    Trader <-->|Execution| BrokerAPI
+    WS <-->|Raw Ticks| WSTick
+    Service <-->|Prompt/Response| Gemini
+            AlgoTrade Pro: A Production-Grade Algorithmic Trading Platform for Indian Stock Markets

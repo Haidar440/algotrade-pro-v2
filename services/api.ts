@@ -1,11 +1,16 @@
 /**
  * api.ts — Shared API helper for all frontend components
- * 
+ *
  * Provides secureGet/securePost that call the Python FastAPI backend
  * with JWT auth from localStorage.
+ *
+ * All requests have a 8-second AbortController timeout so UI never
+ * spins forever when the backend or Angel One API is slow.
  */
 
 const API_BASE = "http://localhost:8000/api";
+export const DEFAULT_TIMEOUT_MS = 8000;   // 8s for all normal requests
+export const SCAN_TIMEOUT_MS    = 45000;  // 45s for heavy scan/analysis endpoints
 
 export class ApiError extends Error {
     status: number;
@@ -29,21 +34,39 @@ const isAuthPath = (path: string): boolean => {
 };
 
 const shouldAutoLogoutOn401 = (path: string, token: string | null): boolean => {
-    // Never force logout for auth endpoints (e.g. wrong password on login).
     if (isAuthPath(path)) return false;
-    // If no token exists, this is not a session-expiry case.
     if (!token) return false;
     return true;
 };
 
 /**
  * Handle 401 Unauthorized — clear stored JWT and dispatch logout event.
- * This stops all polling components (they unmount on logout redirect).
  */
 function handle401(): never {
     localStorage.removeItem("algoTradePro_jwt");
     window.dispatchEvent(new Event("auth:logout"));
     throw new Error("Session expired. Please log in again.");
+}
+
+/**
+ * Creates a fetch call wrapped with an AbortController timeout.
+ * If the request takes longer than FETCH_TIMEOUT_MS, it auto-aborts
+ * and throws a user-friendly timeout error.
+ */
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const res = await fetch(url, { ...options, signal: controller.signal });
+        return res;
+    } catch (err: any) {
+        if (err.name === 'AbortError') {
+            throw new ApiError('Request timed out. The server is taking too long to respond.', 408);
+        }
+        throw err;
+    } finally {
+        clearTimeout(timeoutId);
+    }
 }
 
 // Legacy export — some components import { api } for direct use
@@ -54,14 +77,14 @@ export const api = {
     delete: (path: string) => secureDelete(path),
 };
 
-export async function secureGet(path: string): Promise<any> {
+export async function secureGet(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<any> {
     const token = getToken();
-    const res = await fetch(`${API_BASE}${path}`, {
+    const res = await fetchWithTimeout(`${API_BASE}${path}`, {
         headers: {
             "Content-Type": "application/json",
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-    });
+    }, timeoutMs);
 
     if (res.status === 401 && shouldAutoLogoutOn401(path, token)) handle401();
 
@@ -80,16 +103,16 @@ export async function secureGet(path: string): Promise<any> {
     return json.data ?? json;
 }
 
-export async function securePost(path: string, body?: any): Promise<any> {
+export async function securePost(path: string, body?: any, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<any> {
     const token = getToken();
-    const res = await fetch(`${API_BASE}${path}`, {
+    const res = await fetchWithTimeout(`${API_BASE}${path}`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: body ? JSON.stringify(body) : undefined,
-    });
+    }, timeoutMs);
 
     if (res.status === 401 && shouldAutoLogoutOn401(path, token)) handle401();
 
@@ -110,7 +133,7 @@ export async function securePost(path: string, body?: any): Promise<any> {
 
 export async function secureDelete(path: string): Promise<any> {
     const token = getToken();
-    const res = await fetch(`${API_BASE}${path}`, {
+    const res = await fetchWithTimeout(`${API_BASE}${path}`, {
         method: "DELETE",
         headers: {
             "Content-Type": "application/json",
@@ -137,7 +160,7 @@ export async function secureDelete(path: string): Promise<any> {
 
 export async function securePut(path: string, body?: any): Promise<any> {
     const token = getToken();
-    const res = await fetch(`${API_BASE}${path}`, {
+    const res = await fetchWithTimeout(`${API_BASE}${path}`, {
         method: "PUT",
         headers: {
             "Content-Type": "application/json",

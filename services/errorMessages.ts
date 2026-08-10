@@ -40,6 +40,12 @@ export function getUserErrorMessage(err: unknown, context: ErrorContext = 'gener
       return message || fallbackByContext[context];
     }
 
+    // 502 = broker error (Angel One / Zerodha rejected the request)
+    // The actual broker message is in err.message — show it directly
+    if (err.status === 502) {
+      return err.message?.trim() || fallbackByContext[context];
+    }
+
     if (err.status >= 500) {
       return 'Server error. Please try again in a moment.';
     }

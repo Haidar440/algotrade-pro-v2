@@ -80,7 +80,7 @@ def get_active_broker_optional() -> Optional[BrokerInterface]:
     "/connect",
     response_model=ApiResponse[dict],
     summary="Connect to a broker",
-    description="Connect to Angel One, Zerodha, or Paper Trading.",
+    description="Connect to Angel One or Paper Trading.",
 )
 async def connect_broker(
     body: BrokerConnectRequest,
@@ -89,10 +89,10 @@ async def connect_broker(
     """Connect to a broker using encrypted credentials from vault.
 
     Paper trading requires no credentials.
-    Angel/Zerodha credentials are loaded from .env settings.
+    Angel credentials are loaded from .env settings.
 
     Args:
-        body: Contains broker name ('angel', 'zerodha', 'paper').
+        body: Contains broker name ('angel' or 'paper').
         user: Authenticated user (from JWT).
 
     Returns:
@@ -104,7 +104,7 @@ async def connect_broker(
         broker_name = BrokerName(body.broker.lower())
     except ValueError:
         raise ValidationError(
-            f"Invalid broker: '{body.broker}'. Choose: angel, zerodha, paper"
+            f"Invalid broker: '{body.broker}'. Choose: angel, paper"
         )
 
     # Disconnect existing broker if any
@@ -134,13 +134,6 @@ async def connect_broker(
             "client_id": client_id,
             "password": password,
             "totp_secret": totp_secret,
-        }
-    elif broker_name == BrokerName.ZERODHA:
-        if not settings.is_broker_configured("zerodha"):
-            raise BrokerNotConfiguredError(broker="Zerodha")
-        credentials = {
-            "api_key": settings.ZERODHA_API_KEY,
-            "api_secret": settings.ZERODHA_API_SECRET,
         }
     else:
         raise BrokerNotConfiguredError(broker=body.broker)

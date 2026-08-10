@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { analyzeStockNews } from '../services/gemini';
 import { NewsAnalysisResult } from '../types';
 import { getUserErrorMessage } from '../services/errorMessages';
-import { secureGet } from '../services/api';
+import { secureGet, SCAN_TIMEOUT_MS } from '../services/api';
 import {
   Search, TrendingUp, TrendingDown, ExternalLink, Loader2, Newspaper,
   AlertTriangle, Zap, BarChart2, CheckCircle2, Globe, ShieldCheck, ArrowRight,
@@ -44,7 +44,7 @@ const NewsAnalysisDashboard: React.FC<NewsAnalysisDashboardProps> = ({ initialSy
   const fetchMarketMood = async () => {
     setMoodLoading(true);
     try {
-      const res = await secureGet('/ai/news/market-mood');
+      const res = await secureGet('/ai/news/market-mood', SCAN_TIMEOUT_MS);
       setMarketMood(res);
     } catch (e) {
       console.warn('Market mood unavailable:', e);

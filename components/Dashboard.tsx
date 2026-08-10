@@ -5,10 +5,11 @@ import { streamer } from '../services/streaming';
 import { AngelOne } from '../services/angel';
 import { TechnicalAnalysisEngine } from '../services/technicalAnalysis'; // kept for positionSize()
 import { analyzeStockTicker, fetchMarketIndices } from '../services/gemini';
-import { AutoTrader, AutoTraderConfig } from '../services/autoTrader';
 import { DB_SERVICE } from '../services/db';
 import { secureGet, securePost } from '../services/api';
 import { getUserErrorMessage } from '../services/errorMessages';
+import { useBroker } from '../contexts/BrokerContext';
+import { useEngine } from '../contexts/EngineContext';
 
 // COMPONENTS
 import PaperTradingDashboard from './PaperTradingDashboard';
@@ -16,7 +17,6 @@ import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 import StrategyGuide from './StrategyGuide';
 import SettingsModal from './SettingsModal';
-import PythonLab from './PythonLab';
 import StockScreener from './StockScreener';
 import BacktestDashboard from './BacktestDashboard';
 import SignalFeedCard from './SignalFeedCard';
@@ -24,7 +24,7 @@ import BottomNav from './BottomNav';
 import StockDetailView from './StockDetailView';
 import NewsAnalysisDashboard from './NewsAnalysisDashboard';
 import RealPortfolio from './RealPortfolio';
-import AutoTraderDashboard from './AutoTraderDashboard';
+import AutoBotCommand from './AutoBotCommand';
 import { checkMarketStatus } from '../utils/marketTime';
 import TradeHistory from './TradeHistory';
 import DashboardHome from './DashboardHome';
@@ -38,17 +38,16 @@ import {
 } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
+    // ── Use contexts instead of local state for broker + engine ──────────────
+    const { brokerState, setBrokerState, angel, isConnected } = useBroker();
+    const { engine: autoTraderInstance } = useEngine();
+
     const [currentView, setCurrentView] = useState<View>('DASHBOARD');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [autoTraderInstance, setAutoTraderInstance] = useState<AutoTrader | null>(null);
     const viewBeforeAnalysis = useRef<View>('DASHBOARD');
 
     const [paperTrades, setPaperTrades] = useState<PaperTrade[]>(() => {
         try { return JSON.parse(localStorage.getItem('algoTradePro_portfolio') || '[]'); } catch { return []; }
-    });
-
-    const [brokerState, setBrokerState] = useState<BrokerState>(() => {
-        try { return JSON.parse(localStorage.getItem('algoTradePro_brokerState') || '{}'); } catch { return {}; }
     });
 
     const [watchlist, setWatchlist] = useState<SignalFeedItem[]>(() => {
@@ -64,51 +63,7 @@ const Dashboard: React.FC = () => {
     const [loadingStep, setLoadingStep] = useState<number>(0);
     const [isMarketOpen, setIsMarketOpen] = useState(false);
     const [marketIndices, setMarketIndices] = useState<any>(null);
-
-    // Initialize Global AutoTrader
-    useEffect(() => {
-        if (brokerState.angel && !autoTraderInstance) {
-            console.log("🤖 Initializing Global Auto-Trader...");
-            const angel = new AngelOne(brokerState.angel);
-            const defaultConfig: AutoTraderConfig = {
-                capital: 50000, riskPerTrade: 1, maxDailyLoss: 2000,
-                targetMultiplier: 2, enableTrailingSL: true,
-                symbols: ['SBIN', 'RELIANCE'], maxOpenPositions: 3,
-                isPaperTrading: true
-            };
-            const trader = new AutoTrader(angel, defaultConfig);
-            setAutoTraderInstance(trader);
-        }
-    }, [!!brokerState.angel]);
-
-    // ✅ Auto-reconnect broker on backend when frontend has credentials
-    // Backend _active_broker is in-memory — lost on server restart.
-    // This ensures search, portfolio, historical data all work.
-    useEffect(() => {
-        if (!brokerState.angel) return;
-        const ensureBackendBrokerConnected = async () => {
-            try {
-                const status: any = await secureGet('/broker/status');
-                if (status?.connected) {
-                    console.log("✅ Backend broker already connected:", status.broker);
-                    return;
-                }
-            } catch (e) { /* status check failed, try reconnecting */ }
-
-            try {
-                console.log("🔄 Auto-reconnecting broker on backend...");
-                await securePost('/broker/connect', {
-                    broker: 'angel',
-                    api_key: brokerState.angel?.apiKey || undefined,
-                    client_id: brokerState.angel?.clientCode || undefined,
-                });
-                console.log("✅ Backend broker auto-reconnected");
-            } catch (e) {
-                console.warn("⚠️ Backend broker auto-reconnect failed (credentials may be in .env):", e);
-            }
-        };
-        ensureBackendBrokerConnected();
-    }, [brokerState.angel]);
+    // NOTE: autoTraderInstance and brokerState now come from contexts above
 
     useEffect(() => {
         setIsMarketOpen(checkMarketStatus());
@@ -132,24 +87,22 @@ const Dashboard: React.FC = () => {
     ];
 
     const handleSessionUpdate = (newTokens: any) => {
-        setBrokerState(prev => {
-            const newState = { ...prev, angel: { ...prev.angel, ...newTokens } };
-            localStorage.setItem('algoTradePro_brokerState', JSON.stringify(newState));
-            return newState;
-        });
+        // BrokerContext.setBrokerState handles localStorage persistence internally
+        setBrokerState({ ...brokerState, angel: { ...brokerState.angel, ...newTokens } });
     };
 
     const scanFeaturedStocks = async () => {
         if (!brokerState.angel) return;
         setScanning(true);
-        const angel = new AngelOne(brokerState.angel, handleSessionUpdate);
+        // Use the shared angel instance from BrokerContext (not a new one)
+        const angelInstance = angel || new AngelOne(brokerState.angel, handleSessionUpdate);
         const stocksToScan = INDIAN_STOCKS.slice(0, 8);
         const newSignals: SignalFeedItem[] = [];
 
         try {
             for (const stock of stocksToScan) {
                 try {
-                    const history = await angel.getHistoricalData(stock.symbol.replace('.NS', ''), "ONE_DAY", 100);
+                    const history = await angelInstance.getHistoricalData(stock.symbol.replace('.NS', ''), "ONE_DAY", 100);
                     if (history && history.length > 50) {
                         // Use backend API for analysis (single source of truth)
                         const analysis = await analyzeStockTicker(stock.symbol.replace('.NS', ''));
@@ -210,7 +163,7 @@ const Dashboard: React.FC = () => {
     }, [result, brokerState.angel]);
 
     useEffect(() => { localStorage.setItem('algoTradePro_portfolio', JSON.stringify(paperTrades)); }, [paperTrades]);
-    useEffect(() => { localStorage.setItem('algoTradePro_brokerState', JSON.stringify(brokerState)); }, [brokerState]);
+    // NOTE: brokerState localStorage is now handled by BrokerContext — no longer here
     useEffect(() => { localStorage.setItem('algoTradePro_watchlist', JSON.stringify(watchlist)); }, [watchlist]);
 
     const refreshIndices = async () => {
@@ -475,10 +428,9 @@ const Dashboard: React.FC = () => {
                             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500"><TradeHistory brokerState={brokerState} isVisible={currentView === 'TRADE_HISTORY'} /></div>
                         </div>
                         {/* Lightweight views: mount/unmount is fine */}
-                        {currentView === 'AUTO_TRADER' && <div className="animate-in fade-in slide-in-from-bottom-4 duration-500"><h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2"><Bot className="w-6 h-6 text-amber-500" /> Algorithmic Trading Engine</h2><AutoTraderDashboard brokerState={brokerState} existingTrader={autoTraderInstance} /></div>}
+                        {currentView === 'AUTO_TRADER' && <div className="animate-in fade-in slide-in-from-bottom-4 duration-500"><h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2"><Bot className="w-6 h-6 text-amber-500" /> Algorithmic Trading Engine</h2><AutoBotCommand brokerState={brokerState} engine={autoTraderInstance} /></div>}
                         {currentView === 'BACKTEST' && <BacktestDashboard brokerState={brokerState} />}
                         {currentView === 'STRATEGIES' && <StrategyGuide />}
-                        {currentView === 'PYTHON_LAB' && <div className="h-full"><PythonLab data={result} brokerState={brokerState} /></div>}
                         {currentView === 'SCREENER' && <StockScreener />}
                         {currentView === 'AI_PICKS' && <AiPicksDashboard />}
                         {currentView === 'ANALYTICS' && <AnalyticsDashboard />}

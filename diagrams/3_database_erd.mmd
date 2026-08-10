@@ -1,0 +1,38 @@
+erDiagram
+    USERS {
+        int id PK
+        string email
+        string hashed_password
+        boolean is_active
+    }
+    
+    BROKER_CREDENTIALS {
+        int id PK
+        int user_id FK
+        string broker_name
+        string api_key
+        string client_id
+        string encrypted_totp_secret
+    }
+    
+    TRADES {
+        int id PK
+        int user_id FK
+        string symbol
+        string trade_type
+        string status
+        float entry_price
+        float exit_price
+        string source
+    }
+
+    WATCHLISTS {
+        int id PK
+        int user_id FK
+        string name
+        json symbols
+    }
+
+    USERS ||--o{ BROKER_CREDENTIALS : "has"
+    USERS ||--o{ TRADES : "executes"
+    USERS ||--o{ WATCHLISTS : "manages"
